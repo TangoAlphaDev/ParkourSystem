@@ -55,19 +55,23 @@ protected:
 	
 	// Height thresholds (for tuning)
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
-	float MaxStepHeight = 70.f;
+	float MaxStepHeight = 60.f;
 
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
 	float MaxVaultHeight = 150.f;
 
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
-	float MaxHighVaultHeight = 200.f;
+	float MaxHighVaultHeight = 201.f;
 
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
-	float MaxClimbObjectHeight = 300.f;
+	float MaxClimbObjectHeight = 301.f;
 	
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
 	float MaxDoubleClimbObjectHeight = 400.f;
+
+	// Fine-tuning adjustment for side trace hit location
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|Trace")
+	float SideTraceAdjustment = 45.0f;
 
 private:
 
@@ -96,6 +100,9 @@ private:
 	FHitResult CachedInitHeightHit;
 	FHitResult CachedEndHeightHit; 
 	FHitResult CachedLandHeightHit;
+	
+	UE::Math::TVector<double> CachedLeftSideHitLocation;
+	UE::Math::TVector<double> CachedRightSideHitLocation;
 
 	bool CachedLeftSideHit = false;
 	bool CachedRightSideHit = false;

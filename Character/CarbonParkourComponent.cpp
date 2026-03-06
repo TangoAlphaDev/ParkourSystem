@@ -18,6 +18,8 @@ void UCarbonParkourComponent::VaultSolution()
 	CachedInitHeightHit = FHitResult();
 	CachedEndHeightHit = FHitResult();
 	CachedLandHeightHit = FHitResult();
+	CachedLeftSideHitLocation = FVector::ZeroVector;
+	CachedRightSideHitLocation = FVector::ZeroVector;
 	CachedLeftSideHit = false;
 	CachedRightSideHit = false;
 	CachedGroundOffset = 0.f;
@@ -246,11 +248,24 @@ bool UCarbonParkourComponent::SideTrace(bool bLeftSide)
 		return false;
 	}
 
-	// Calculate trace start and end locations
-	FVector StartLocation = OwnerChar->GetActorLocation();
+	// Get the capsule component
+	UCapsuleComponent* Capsule = OwnerChar->GetCapsuleComponent();
+	if (!Capsule)
+	{
+		return false;
+	}
+
+	// Calculate offsets
+	FVector ForwardVector = OwnerChar->GetActorForwardVector();
 	FVector RightVector = OwnerChar->GetActorRightVector();
 	FVector TraceDirection = bLeftSide ? -RightVector : RightVector;
-	FVector EndLocation = StartLocation + (TraceDirection * SideTraceDistance);
+
+	// Get the capsule radius
+	float CapsuleRadius = Capsule->GetScaledCapsuleRadius();
+
+	// Calculate trace start and end locations
+	FVector StartLocation = OwnerChar->GetActorLocation(); // + (ForwardVector * 150.f) + FVector(0.f, 0.f, 45.f);
+	FVector EndLocation = StartLocation + (ForwardVector * 150.f) + FVector(0.f, 0.f, 45.f) + (TraceDirection * SideTraceDistance);
 
 	FCollisionQueryParams TraceParams(FName(TEXT("ParkourSideTrace")), true, OwnerChar);
 	TraceParams.bReturnPhysicalMaterial = false;
@@ -265,14 +280,26 @@ bool UCarbonParkourComponent::SideTrace(bool bLeftSide)
 		TraceParams
 	);
 
+	// Check if the side trace hit the same wall as the forward trace
+	if (bHit && CachedForwardHit.GetActor() == HitResult.GetActor())
+	{
+		bHit = false; // Ignore the hit if it's the same wall
+		HitResult = FHitResult(); // Clear the hit result
+	}
+
+	// Adjust the hit location by the capsule radius
+	FVector AdjustedHitLocation = HitResult.Location + (TraceDirection * (CapsuleRadius + SideTraceAdjustment));
+
 	// Cache the result based on the side
 	if (bLeftSide)
 	{
 		CachedLeftSideHit = bHit;
+		CachedLeftSideHitLocation = bHit ? AdjustedHitLocation : FVector::ZeroVector;
 	}
 	else
 	{
 		CachedRightSideHit = bHit;
+		CachedRightSideHitLocation = bHit ? AdjustedHitLocation : FVector::ZeroVector;
 	}
 	
 	// Debug visualization
@@ -333,85 +360,50 @@ float UCarbonParkourComponent::GetGroundOffset()
 // Pick vault type based on trace results
 ECarbonParkourType UCarbonParkourComponent::ClassifyParkourType()
 {
-	if (!CachedForwardHit.IsValidBlockingHit())
-	{
-		return ECarbonParkourType::None;
-	}
-	if (CachedObjectHeights[1] < MaxStepHeight)
-	{
-		if (CachedObjectDepth < ObjectDepthMedium)
-		{
-			return ECarbonParkourType::Step;
-		}
-		else
-		{
-			return ECarbonParkourType::StepOn;
-		}
-	}
-	if (CachedObjectHeights[1] < MaxVaultHeight)
-	{
-		if (CachedLeftSideHit)
-		{
-			return ECarbonParkourType::TicTacVaultLeft;
-		}
-		if (CachedRightSideHit)
-		{
-			return ECarbonParkourType::TicTacVaultRight;
-		}
-		else
-		{
-			if (CachedObjectDepth < ObjectDepthShort)
-			{
-				return ECarbonParkourType::VaultShort;
-			}
-			if (CachedObjectDepth < ObjectDepthMedium)
-			{
-				return ECarbonParkourType::VaultMedium;
-			}
-			if (CachedObjectDepth < ObjectDepthLong)
-			{
-				return ECarbonParkourType::VaultLong;
-			}
-			else
-			{
-				return ECarbonParkourType::VaultOn;
-			}	
-		}
-	}
-	if (CachedObjectHeights[1] < MaxHighVaultHeight)
-	{
-		if (CachedLeftSideHit)
-		{
-			return ECarbonParkourType::TicTacHighLeft;
-		}
-		if (CachedRightSideHit)
-		{
-			return ECarbonParkourType::TicTacHighRight;
-		}
-		else
-		{
-			if (CachedObjectDepth < ObjectDepthShort)
-			{
-				return ECarbonParkourType::VaultHigh;
-			}
-			else
-			{
-				return ECarbonParkourType::VaultHighOn;
-			}
-		}
-	}
-	if (CachedObjectHeights[1] < MaxClimbObjectHeight)
-	{
-		return ECarbonParkourType::ClimbUpLow;
-	}
-	if (CachedObjectHeights[1] < MaxDoubleClimbObjectHeight)
-	{
-		return ECarbonParkourType::ClimbUpHigh;
-	}
-	else
-	{
-		return ECarbonParkourType::None;
-	}
+	CachedParkourSolution.bShouldFall = false; // Default to not falling
+    if (!CachedForwardHit.IsValidBlockingHit())
+    {
+        return ECarbonParkourType::None;
+    }
+
+    float ObjectHeight = CachedObjectHeights[1];
+    if (ObjectHeight < MaxStepHeight)
+    {
+        return CachedObjectDepth < ObjectDepthMedium ? ECarbonParkourType::Step : ECarbonParkourType::StepOn;
+    }
+    if (ObjectHeight < MaxVaultHeight)
+    {
+        if (CachedLeftSideHit) return ECarbonParkourType::TicTacVaultLeft;
+        if (CachedRightSideHit) return ECarbonParkourType::TicTacVaultRight;
+
+        if (CachedObjectDepth < ObjectDepthShort) return ECarbonParkourType::VaultShort;
+        if (CachedObjectDepth < ObjectDepthMedium) return ECarbonParkourType::VaultMedium;
+        if (CachedObjectDepth < ObjectDepthLong) return ECarbonParkourType::VaultLong;
+
+        return ECarbonParkourType::VaultOn;
+    }
+    if (ObjectHeight < MaxHighVaultHeight)
+    {
+    	CachedParkourSolution.bShouldFall = true; // Falling for high vaults
+        if (CachedLeftSideHit) return ECarbonParkourType::TicTacHighLeft;
+        if (CachedRightSideHit) return ECarbonParkourType::TicTacHighRight;
+        else
+        {
+        	if (CachedObjectDepth < ObjectDepthShort)
+        	{
+        		return ECarbonParkourType::VaultHigh;
+        	}
+        	else
+        	{
+        		CachedParkourSolution.bShouldFall = false; // Don't fall if vaulting on taller objects
+        		return ECarbonParkourType::VaultHighOn;
+        	}
+        }
+    }
+    if (ObjectHeight < MaxClimbObjectHeight) return ECarbonParkourType::ClimbUpLow;
+    if (ObjectHeight < MaxDoubleClimbObjectHeight) return ECarbonParkourType::ClimbUpHigh;
+
+    return ECarbonParkourType::None;
 }
 
 
@@ -440,6 +432,7 @@ void UCarbonParkourComponent::BuildParkourSolution()
 
 	// Warp target names
 	Solution.WarpTargetStart = TEXT("ParkourTargetStart");
+	Solution.WarpTargetTicTac = TEXT("ParkourTargetTicTac");
 	Solution.WarpTargetMiddle = TEXT("ParkourTargetMid");
 	Solution.WarpTargetEnd = TEXT("ParkourTargetEnd");
 

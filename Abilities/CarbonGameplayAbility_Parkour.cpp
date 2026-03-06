@@ -54,6 +54,9 @@ void UCarbonGameplayAbility_Parkour::ActivateAbility(
 		return;
 	}
 
+	// Set local bool
+	AbilityFalling = Solution.bShouldFall;
+
 	// Validate the Parkour Data
 	if (!ParkourData)
 	{
@@ -141,7 +144,15 @@ void UCarbonGameplayAbility_Parkour::OnMontageCompleted()
 	{
 		if (UCharacterMovementComponent* MoveComp = LyraChar->GetCharacterMovement())
 		{
-			MoveComp->SetMovementMode(MOVE_Walking);
+			if (AbilityFalling)
+			{
+				MoveComp->SetMovementMode(MOVE_Falling);
+				AbilityFalling = false; // Reset the flag after setting movement mode
+			}
+			else
+			{
+				MoveComp->SetMovementMode(MOVE_Walking);
+			}
 		}
 	}
 	
@@ -157,7 +168,15 @@ void UCarbonGameplayAbility_Parkour::OnMontageCancelled()
 	{
 		if (UCharacterMovementComponent* MoveComp = LyraChar->GetCharacterMovement())
 		{
-			MoveComp->SetMovementMode(MOVE_Walking);
+			if (AbilityFalling)
+			{
+				MoveComp->SetMovementMode(MOVE_Falling);
+				AbilityFalling = false;
+			}
+			else
+			{
+				MoveComp->SetMovementMode(MOVE_Walking);
+			}
 		}
 	}
 	
@@ -180,6 +199,15 @@ void UCarbonGameplayAbility_Parkour::ApplyWarpTargets(ALyraCharacter* Character,
 		Solution.WarpTransformStart
 	));
 
+	// Add tic-tac warp target if specified
+	if (!Solution.WarpTargetTicTac.IsNone())
+	{
+		MotionWarpComp->AddOrUpdateWarpTarget(FMotionWarpingTarget(
+			Solution.WarpTargetTicTac,
+			Solution.WarpTransformTicTac
+		));
+	}
+
 	// Add middle warp target if specified
 	if (!Solution.WarpTargetMiddle.IsNone())
 	{
@@ -190,10 +218,13 @@ void UCarbonGameplayAbility_Parkour::ApplyWarpTargets(ALyraCharacter* Character,
 	}
 
 	// Add end warp target
-	MotionWarpComp->AddOrUpdateWarpTarget(FMotionWarpingTarget(
-		Solution.WarpTargetEnd,
-		Solution.WarpTransformEnd
-	));
+	if (!Solution.WarpTargetEnd.IsNone())
+	{
+		MotionWarpComp->AddOrUpdateWarpTarget(FMotionWarpingTarget(
+			Solution.WarpTargetEnd,
+			Solution.WarpTransformEnd
+		));
+	}
 
 	UE_LOG(LogTemp, Warning, TEXT("Applying warp targets. MotionWarp=%s"), MotionWarpComp ? TEXT("YES") : TEXT("NO"));
 }

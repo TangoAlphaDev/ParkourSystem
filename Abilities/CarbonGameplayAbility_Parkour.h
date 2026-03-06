@@ -33,4 +33,6 @@ protected:
 
 	UFUNCTION()
 	void OnMontageCancelled();
+
+	bool AbilityFalling = false;
 };

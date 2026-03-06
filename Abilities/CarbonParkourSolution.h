@@ -67,6 +67,17 @@ public:
 	UPROPERTY(BlueprintReadOnly)
 	FVector SurfaceNormal = FVector::ZeroVector;
 
+	// Tic-Tac warp targets
+	UPROPERTY(BlueprintReadOnly)
+	FName WarpTargetTicTac = NAME_None;
+	
+	UPROPERTY(BlueprintReadOnly)
+	FTransform WarpTransformTicTac = FTransform::Identity;
+
+	// Bool to select movement state after object
+	UPROPERTY(BlueprintReadOnly)
+	bool bShouldFall = false;
+
 	// Reset all values
 	void Reset()
 	{

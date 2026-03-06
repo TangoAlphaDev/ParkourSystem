@@ -26,6 +26,9 @@ struct FCarbonParkourMove
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	FName WarpTargetStartName = "ParkourTargetStart";
 
+	UPROPERTY(EditAnywhere,BlueprintReadOnly)
+	FName WarpTargetTicTacName = "ParkourTargetTicTac";
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	FName WarpTargetMidName = "ParkourTargetMid";
 

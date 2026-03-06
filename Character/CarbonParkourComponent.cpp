@@ -20,6 +20,10 @@ void UCarbonParkourComponent::VaultSolution()
 	CachedLandHeightHit = FHitResult();
 	CachedLeftSideHitLocation = FVector::ZeroVector;
 	CachedRightSideHitLocation = FVector::ZeroVector;
+	CachedLeftSideWarpLocation = FVector::ZeroVector;
+	CachedRightSideWarpLocation = FVector::ZeroVector;
+	CachedLeftSideRotation = FRotator::ZeroRotator;
+	CachedRightSideRotation = FRotator::ZeroRotator;
 	CachedLeftSideHit = false;
 	CachedRightSideHit = false;
 	CachedGroundOffset = 0.f;
@@ -27,10 +31,10 @@ void UCarbonParkourComponent::VaultSolution()
 	CachedParkourSolution.Reset();
 
 	// Run traces
-	DepthTrace();
-	RunHeightTraces();
 	SideTrace(true); // Left side
 	SideTrace(false); // Right side
+	DepthTrace();
+	RunHeightTraces();
 
 	// Select the animation type
 	ECarbonParkourType ParkourType = ClassifyParkourType();
@@ -41,6 +45,87 @@ void UCarbonParkourComponent::VaultSolution()
 	// Build parkour solution
 	BuildParkourSolution();
 }
+
+
+// Side trace to check for space on sides of obstacle
+bool UCarbonParkourComponent::SideTrace(bool bLeftSide)
+{
+	ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
+	if (!OwnerChar)
+	{
+		return false;
+	}
+
+	// Calculate offsets
+	FVector ForwardVector = OwnerChar->GetActorForwardVector();
+	FVector RightVector = OwnerChar->GetActorRightVector();
+	FVector TraceDirection = bLeftSide ? -RightVector : RightVector;
+
+	// Calculate trace start and end locations
+	FVector StartLocation = OwnerChar->GetActorLocation();
+	FVector EndLocation = StartLocation + (ForwardVector * 150.f) + FVector(0.f, 0.f, 45.f) + (TraceDirection * SideTraceDistance);
+
+	FCollisionQueryParams TraceParams(FName(TEXT("ParkourSideTrace")), true, OwnerChar);
+	TraceParams.bReturnPhysicalMaterial = false;
+
+	// Perform the line trace
+	FHitResult HitResult;
+	bool bHit = GetWorld()->LineTraceSingleByChannel(
+		HitResult,
+		StartLocation,
+		EndLocation,
+		ECC_Visibility,
+		TraceParams
+	);
+
+	// Check if the side trace hit the same wall as the forward trace
+	if (bHit && CachedForwardHit.GetActor() == HitResult.GetActor())
+	{
+		bHit = false; // Ignore the hit if it's the same wall
+		HitResult = FHitResult(); // Clear the hit result
+	}
+
+	// Adjust the hit location to align with the capsule's Y location
+	FVector CapsuleLocation = OwnerChar->GetActorLocation();
+	FVector AdjustedHitLocation = HitResult.Location;
+	AdjustedHitLocation.X = CapsuleLocation.X;
+
+	// Cache the result based on the side
+	if (bLeftSide)
+	{
+		CachedLeftSideHit = bHit;
+		CachedLeftSideHitLocation = bHit ? HitResult.Location : FVector::ZeroVector;
+		CachedLeftSideWarpLocation = bHit ? AdjustedHitLocation : FVector::ZeroVector;
+
+		if (bHit)
+		{
+			// Rotate the normal 90 degrees clockwise for the left side
+			FVector AdjustedNormal = FVector::CrossProduct(HitResult.ImpactNormal, FVector::UpVector);
+			CachedLeftSideRotation = FRotationMatrix::MakeFromXZ(AdjustedNormal, FVector::UpVector).Rotator();
+		}
+	}
+	else
+	{
+		CachedRightSideHit = bHit;
+		CachedRightSideHitLocation = bHit ? HitResult.Location : FVector::ZeroVector;
+		CachedRightSideWarpLocation = bHit ? AdjustedHitLocation : FVector::ZeroVector;
+
+		if (bHit)
+		{
+			// Rotate the normal 90 degrees counterclockwise for the right side
+			FVector AdjustedNormal = FVector::CrossProduct(FVector::UpVector, HitResult.ImpactNormal);
+			CachedRightSideRotation = FRotationMatrix::MakeFromXZ(AdjustedNormal, FVector::UpVector).Rotator();
+		}
+	}
+	
+	// Debug visualization
+	FColor DebugColor = bHit ? FColor::Green : FColor::Red;
+	DrawDebugLine(GetWorld(), StartLocation, EndLocation, DebugColor, false, 2.0f);
+	
+	// Return the result of the trace
+	return bHit;
+}
+
 
 void UCarbonParkourComponent::DepthTrace()
 {
@@ -184,6 +269,7 @@ void UCarbonParkourComponent::RunHeightTraces()
     HeightTrace(LandLocation, CachedLandHeightHit, FColor::Blue);
 }
 
+
 // The height trace subroutine
 void UCarbonParkourComponent::HeightTrace(const FVector& StartLocation, FHitResult& CachedHitResult, FColor DebugColor)
 {
@@ -236,78 +322,6 @@ void UCarbonParkourComponent::HeightTrace(const FVector& StartLocation, FHitResu
 		UE_LOG(LogTemp, Warning, TEXT("HeightTrace: No hit detected."));
 		DrawDebugLine(GetWorld(), StartLocation, EndLocation, FColor::Red, false, 2.0f);
 	}
-}
-
-
-// Side trace to check for space on sides of obstacle
-bool UCarbonParkourComponent::SideTrace(bool bLeftSide)
-{
-	ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
-	if (!OwnerChar)
-	{
-		return false;
-	}
-
-	// Get the capsule component
-	UCapsuleComponent* Capsule = OwnerChar->GetCapsuleComponent();
-	if (!Capsule)
-	{
-		return false;
-	}
-
-	// Calculate offsets
-	FVector ForwardVector = OwnerChar->GetActorForwardVector();
-	FVector RightVector = OwnerChar->GetActorRightVector();
-	FVector TraceDirection = bLeftSide ? -RightVector : RightVector;
-
-	// Get the capsule radius
-	float CapsuleRadius = Capsule->GetScaledCapsuleRadius();
-
-	// Calculate trace start and end locations
-	FVector StartLocation = OwnerChar->GetActorLocation(); // + (ForwardVector * 150.f) + FVector(0.f, 0.f, 45.f);
-	FVector EndLocation = StartLocation + (ForwardVector * 150.f) + FVector(0.f, 0.f, 45.f) + (TraceDirection * SideTraceDistance);
-
-	FCollisionQueryParams TraceParams(FName(TEXT("ParkourSideTrace")), true, OwnerChar);
-	TraceParams.bReturnPhysicalMaterial = false;
-
-	// Perform the line trace
-	FHitResult HitResult;
-	bool bHit = GetWorld()->LineTraceSingleByChannel(
-		HitResult,
-		StartLocation,
-		EndLocation,
-		ECC_Visibility,
-		TraceParams
-	);
-
-	// Check if the side trace hit the same wall as the forward trace
-	if (bHit && CachedForwardHit.GetActor() == HitResult.GetActor())
-	{
-		bHit = false; // Ignore the hit if it's the same wall
-		HitResult = FHitResult(); // Clear the hit result
-	}
-
-	// Adjust the hit location by the capsule radius
-	FVector AdjustedHitLocation = HitResult.Location + (TraceDirection * (CapsuleRadius + SideTraceAdjustment));
-
-	// Cache the result based on the side
-	if (bLeftSide)
-	{
-		CachedLeftSideHit = bHit;
-		CachedLeftSideHitLocation = bHit ? AdjustedHitLocation : FVector::ZeroVector;
-	}
-	else
-	{
-		CachedRightSideHit = bHit;
-		CachedRightSideHitLocation = bHit ? AdjustedHitLocation : FVector::ZeroVector;
-	}
-	
-	// Debug visualization
-	FColor DebugColor = bHit ? FColor::Green : FColor::Red;
-	DrawDebugLine(GetWorld(), StartLocation, EndLocation, DebugColor, false, 2.0f);
-	
-	// Return the result of the trace
-	return bHit;
 }
 
 
@@ -462,6 +476,12 @@ void UCarbonParkourComponent::BuildParkourSolution()
 	Solution.WarpTransformMid = FTransform(WarpRotation, Mid);
 	Solution.WarpTransformEnd = FTransform(WarpRotation, End);
 
+	// Add side trace results
+	Solution.bLeftSideHit = CachedLeftSideHit;
+	Solution.bRightSideHit = CachedRightSideHit;
+	Solution.LeftSideRotation = CachedLeftSideRotation;
+	Solution.RightSideRotation = CachedRightSideRotation;
+
 	// Cache the solution or broadcast solution (which is best?)
 	CachedParkourSolution = Solution;
 	// OnParkourSolutionReady.Broadcast(Solution);
@@ -470,6 +490,18 @@ void UCarbonParkourComponent::BuildParkourSolution()
 	DrawDebugSphere(GetWorld(), Start, 10.f, 12, FColor::Red, false, 5.0f);
 	DrawDebugSphere(GetWorld(), Mid, 10.f, 12, FColor::Green, false, 5.0f);
 	DrawDebugSphere(GetWorld(), End, 10.f, 12, FColor::Blue, false, 5.0f);
+
+	// draw spheres at the side trace hit locations for debugging
+	if (CachedLeftSideHit)
+	{
+		DrawDebugSphere(GetWorld(), CachedLeftSideHitLocation, 10.f, 12, FColor::Yellow, false, 5.0f);
+		DrawDebugSphere(GetWorld(), CachedLeftSideWarpLocation, 10.f, 12, FColor::Cyan, false, 5.0f);
+	}
+	if (CachedRightSideHit)
+	{
+		DrawDebugSphere(GetWorld(), CachedRightSideHitLocation, 10.f, 12, FColor::Yellow, false, 5.0f);
+		DrawDebugSphere(GetWorld(), CachedRightSideWarpLocation, 10.f, 12, FColor::Cyan, false, 5.0f);
+	}
 }
 
 

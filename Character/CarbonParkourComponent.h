@@ -100,9 +100,15 @@ private:
 	FHitResult CachedInitHeightHit;
 	FHitResult CachedEndHeightHit; 
 	FHitResult CachedLandHeightHit;
-	
+
+	// Side traces
 	UE::Math::TVector<double> CachedLeftSideHitLocation;
 	UE::Math::TVector<double> CachedRightSideHitLocation;
+	UE::Math::TVector<double> CachedLeftSideWarpLocation;
+	UE::Math::TVector<double> CachedRightSideWarpLocation;
+
+	UE::Math::TRotator<double> CachedLeftSideRotation;
+	UE::Math::TRotator<double> CachedRightSideRotation;
 
 	bool CachedLeftSideHit = false;
 	bool CachedRightSideHit = false;

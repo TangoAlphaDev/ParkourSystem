@@ -67,12 +67,24 @@ public:
 	UPROPERTY(BlueprintReadOnly)
 	FVector SurfaceNormal = FVector::ZeroVector;
 
-	// Tic-Tac warp targets
+	// Tic-Tac vault only data
 	UPROPERTY(BlueprintReadOnly)
 	FName WarpTargetTicTac = NAME_None;
 	
 	UPROPERTY(BlueprintReadOnly)
 	FTransform WarpTransformTicTac = FTransform::Identity;
+
+	UPROPERTY(BlueprintReadOnly)
+	bool bLeftSideHit = false;
+
+	UPROPERTY(BlueprintReadOnly)
+	bool bRightSideHit = false;
+
+	UPROPERTY(BlueprintReadOnly)
+	FRotator LeftSideRotation = FRotator::ZeroRotator;
+
+	UPROPERTY(BlueprintReadOnly)
+	FRotator RightSideRotation = FRotator::ZeroRotator;
 
 	// Bool to select movement state after object
 	UPROPERTY(BlueprintReadOnly)
@@ -86,12 +98,15 @@ public:
 		WarpTargetStart = NAME_None;
 		WarpTargetMiddle = NAME_None;
 		WarpTargetEnd = NAME_None;
+		WarpTargetTicTac = NAME_None;
 		TargetTransformStart = FVector::ZeroVector;
 		TargetTransformMid = FVector::ZeroVector;
 		TargetTransformEnd = FVector::ZeroVector;
 		WarpTransformStart = FTransform::Identity;
 		WarpTransformMid = FTransform::Identity;
 		WarpTransformEnd = FTransform::Identity;
+		WarpTransformTicTac = FTransform::Identity;
+		
 		ObstacleDistance = 0.0f;
 		ObstacleHeight = 0.0f;
 		SurfaceNormal = FVector::ZeroVector;

@@ -54,6 +54,16 @@ void UCarbonGameplayAbility_Parkour::ActivateAbility(
 		return;
 	}
 
+	// Align the character to the wall based on side trace results
+	if (Solution.bLeftSideHit)
+	{
+		LyraChar->SetActorRotation(Solution.LeftSideRotation);
+	}
+	else if (Solution.bRightSideHit)
+	{
+		LyraChar->SetActorRotation(Solution.RightSideRotation);
+	}
+
 	// Set local bool
 	AbilityFalling = Solution.bShouldFall;
 

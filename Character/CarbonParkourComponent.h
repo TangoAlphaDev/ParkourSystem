@@ -21,8 +21,15 @@ public:
 	// Build parkour solution based on trace results
 	void BuildParkourSolution();
 
-	// get the cached parkour solution to use in the ability
+	// Get the cached parkour solution to use in the ability
 	const FCarbonParkourSolution& GetCachedParkourSolution() const;
+
+	// Turn on and off debug view
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|Debug")
+	bool bDebugTraces = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|Debug")
+	bool bDebugSpheres = false;
 
 protected:
 
@@ -87,6 +94,9 @@ private:
 	// Function to get ground offset to adjust for character height in traces
 	float GetGroundOffset();
 
+	// Function to validate side hit based on normals
+	void ValidateSideHits();
+
 	// Function to pick vault type based on trace results
 	ECarbonParkourType ClassifyParkourType();
 
@@ -112,6 +122,9 @@ private:
 
 	bool CachedLeftSideHit = false;
 	bool CachedRightSideHit = false;
+
+	FVector CachedLeftSideNormal;
+	FVector CachedRightSideNormal;
 
 	// Cached obstacle measurements
 	TArray<float> CachedObjectHeights;

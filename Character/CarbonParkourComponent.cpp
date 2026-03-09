@@ -26,6 +26,8 @@ void UCarbonParkourComponent::VaultSolution()
 	CachedRightSideRotation = FRotator::ZeroRotator;
 	CachedLeftSideHit = false;
 	CachedRightSideHit = false;
+	CachedLeftSideNormal = FVector::ZeroVector;
+	CachedRightSideNormal = FVector::ZeroVector;
 	CachedGroundOffset = 0.f;
 	CachedObjectHeights.Reset();
 	CachedParkourSolution.Reset();
@@ -35,6 +37,8 @@ void UCarbonParkourComponent::VaultSolution()
 	SideTrace(false); // Right side
 	DepthTrace();
 	RunHeightTraces();
+
+	ValidateSideHits();
 
 	// Select the animation type
 	ECarbonParkourType ParkourType = ClassifyParkourType();
@@ -78,13 +82,6 @@ bool UCarbonParkourComponent::SideTrace(bool bLeftSide)
 		TraceParams
 	);
 
-	// Check if the side trace hit the same wall as the forward trace
-	if (bHit && CachedForwardHit.GetActor() == HitResult.GetActor())
-	{
-		bHit = false; // Ignore the hit if it's the same wall
-		HitResult = FHitResult(); // Clear the hit result
-	}
-
 	// Adjust the hit location to align with the capsule's Y location
 	FVector CapsuleLocation = OwnerChar->GetActorLocation();
 	FVector AdjustedHitLocation = HitResult.Location;
@@ -96,6 +93,7 @@ bool UCarbonParkourComponent::SideTrace(bool bLeftSide)
 		CachedLeftSideHit = bHit;
 		CachedLeftSideHitLocation = bHit ? HitResult.Location : FVector::ZeroVector;
 		CachedLeftSideWarpLocation = bHit ? AdjustedHitLocation : FVector::ZeroVector;
+		CachedLeftSideNormal = HitResult.ImpactNormal;
 
 		if (bHit)
 		{
@@ -109,6 +107,7 @@ bool UCarbonParkourComponent::SideTrace(bool bLeftSide)
 		CachedRightSideHit = bHit;
 		CachedRightSideHitLocation = bHit ? HitResult.Location : FVector::ZeroVector;
 		CachedRightSideWarpLocation = bHit ? AdjustedHitLocation : FVector::ZeroVector;
+		CachedRightSideNormal = HitResult.ImpactNormal;
 
 		if (bHit)
 		{
@@ -117,10 +116,14 @@ bool UCarbonParkourComponent::SideTrace(bool bLeftSide)
 			CachedRightSideRotation = FRotationMatrix::MakeFromXZ(AdjustedNormal, FVector::UpVector).Rotator();
 		}
 	}
-	
+
 	// Debug visualization
-	FColor DebugColor = bHit ? FColor::Green : FColor::Red;
-	DrawDebugLine(GetWorld(), StartLocation, EndLocation, DebugColor, false, 2.0f);
+	if (bDebugTraces)
+	{
+        FColor DebugColor = bHit ? FColor::Green : FColor::Red;
+        DrawDebugLine(GetWorld(), StartLocation, EndLocation, DebugColor, false, 2.0f);
+	}
+	
 	
 	// Return the result of the trace
 	return bHit;
@@ -155,7 +158,7 @@ void UCarbonParkourComponent::DepthTrace()
 	// Ignore all LyraCharacter instances
 	for (TActorIterator<ALyraCharacter> It(GetWorld()); It; ++It)
 	{
-		TraceParams.AddIgnoredActor(*It);
+		TraceParams.AddIgnoredActor(GetOwner());
 	}
 	
     // First capsule trace to detect the object
@@ -171,12 +174,18 @@ void UCarbonParkourComponent::DepthTrace()
     );
 
     // Draw the forward trace capsule at the start location
-    DrawDebugCapsule(GetWorld(), StartLocation, TraceCapsuleHalfHeight, TraceCapsuleRadius, FQuat::Identity, FColor::Blue, false, 2.0f);
+	if (bDebugTraces)
+	{
+		DrawDebugCapsule(GetWorld(), StartLocation, TraceCapsuleHalfHeight, TraceCapsuleRadius, FQuat::Identity, FColor::Blue, false, 2.0f);
+	}
 
     if (bInitialHit)
     {
         // Draw the forward trace capsule at the hit location
-        DrawDebugCapsule(GetWorld(), InitialHitResult.Location, TraceCapsuleHalfHeight, TraceCapsuleRadius, FQuat::Identity, FColor::Green, false, 2.0f);
+    	if (bDebugTraces)
+    	{
+    		DrawDebugCapsule(GetWorld(), InitialHitResult.Location, TraceCapsuleHalfHeight, TraceCapsuleRadius, FQuat::Identity, FColor::Green, false, 2.0f);
+    	}
     	CachedForwardHit = InitialHitResult; // Cache the forward hit
     }
     else
@@ -202,12 +211,18 @@ void UCarbonParkourComponent::DepthTrace()
     );
 
     // Draw the reverse trace capsule at the start location
-    DrawDebugCapsule(GetWorld(), ReverseStartLocation, TraceCapsuleHalfHeight, TraceCapsuleRadius, FQuat::Identity, FColor::Blue, false, 2.0f);
+	if (bDebugTraces)
+	{
+		DrawDebugCapsule(GetWorld(), ReverseStartLocation, TraceCapsuleHalfHeight, TraceCapsuleRadius, FQuat::Identity, FColor::Blue, false, 2.0f);
+	}
 
     if (bReverseHit)
     {
         // Draw the reverse trace capsule at the hit location
-        DrawDebugCapsule(GetWorld(), ReverseHitResult.Location, TraceCapsuleHalfHeight, TraceCapsuleRadius, FQuat::Identity, FColor::Green, false, 2.0f);
+    	if (bDebugTraces)
+    	{
+    		DrawDebugCapsule(GetWorld(), ReverseHitResult.Location, TraceCapsuleHalfHeight, TraceCapsuleRadius, FQuat::Identity, FColor::Green, false, 2.0f);
+    	}
     	CachedBackwardHit = ReverseHitResult; // Cache the backside hit
 
         // Calculate depth
@@ -313,14 +328,20 @@ void UCarbonParkourComponent::HeightTrace(const FVector& StartLocation, FHitResu
 
 		// Add the calculated height to the array
 		CachedObjectHeights.Add(ObjectHeight);
-		
-		DrawDebugLine(GetWorld(), StartLocation, HitResult.Location, DebugColor, false, 2.0f);
-		DrawDebugPoint(GetWorld(), HitResult.Location, 10.f, FColor::Blue, false, 2.0f);
+
+		if (bDebugTraces)
+		{
+			DrawDebugLine(GetWorld(), StartLocation, HitResult.Location, DebugColor, false, 2.0f);
+			DrawDebugPoint(GetWorld(), HitResult.Location, 10.f, FColor::Blue, false, 2.0f);
+		}
 	}
 	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("HeightTrace: No hit detected."));
-		DrawDebugLine(GetWorld(), StartLocation, EndLocation, FColor::Red, false, 2.0f);
+		if (bDebugTraces)
+		{
+			DrawDebugLine(GetWorld(), StartLocation, EndLocation, FColor::Red, false, 2.0f);
+		}
 	}
 }
 
@@ -368,6 +389,40 @@ float UCarbonParkourComponent::GetGroundOffset()
     }
 
     return 0.f; // Default to 0 if no ground detected
+}
+
+
+// Validate the side hit results by comparing the normals
+void UCarbonParkourComponent::ValidateSideHits()
+{
+	if (!CachedForwardHit.IsValidBlockingHit())
+	{
+		CachedLeftSideHit = false;
+		CachedRightSideHit = false;
+		return;
+	}
+
+	const FVector ForwardNormal = CachedForwardHit.ImpactNormal;
+
+	const float NormalThreshold = 0.8f; // ~36 degrees
+
+	if (CachedLeftSideHit)
+	{
+		float Dot = FVector::DotProduct(ForwardNormal, CachedRightSideNormal); 
+		if (Dot > NormalThreshold)
+		{
+			CachedLeftSideHit = false;
+		}
+	}
+
+	if (CachedRightSideHit)
+	{
+		float Dot = FVector::DotProduct(ForwardNormal, CachedRightSideNormal);
+		if (Dot > NormalThreshold)
+		{
+			CachedRightSideHit = false;
+		}
+	}
 }
 
 
@@ -486,21 +541,24 @@ void UCarbonParkourComponent::BuildParkourSolution()
 	CachedParkourSolution = Solution;
 	// OnParkourSolutionReady.Broadcast(Solution);
 
-	// draw spheres at the warp target locations for debugging
-	DrawDebugSphere(GetWorld(), Start, 10.f, 12, FColor::Red, false, 5.0f);
-	DrawDebugSphere(GetWorld(), Mid, 10.f, 12, FColor::Green, false, 5.0f);
-	DrawDebugSphere(GetWorld(), End, 10.f, 12, FColor::Blue, false, 5.0f);
+	if (bDebugSpheres)
+	{
+		// draw spheres at the warp target locations for debugging
+		DrawDebugSphere(GetWorld(), Start, 10.f, 12, FColor::Red, false, 5.0f);
+		DrawDebugSphere(GetWorld(), Mid, 10.f, 12, FColor::Green, false, 5.0f);
+		DrawDebugSphere(GetWorld(), End, 10.f, 12, FColor::Blue, false, 5.0f);
 
-	// draw spheres at the side trace hit locations for debugging
-	if (CachedLeftSideHit)
-	{
-		DrawDebugSphere(GetWorld(), CachedLeftSideHitLocation, 10.f, 12, FColor::Yellow, false, 5.0f);
-		DrawDebugSphere(GetWorld(), CachedLeftSideWarpLocation, 10.f, 12, FColor::Cyan, false, 5.0f);
-	}
-	if (CachedRightSideHit)
-	{
-		DrawDebugSphere(GetWorld(), CachedRightSideHitLocation, 10.f, 12, FColor::Yellow, false, 5.0f);
-		DrawDebugSphere(GetWorld(), CachedRightSideWarpLocation, 10.f, 12, FColor::Cyan, false, 5.0f);
+		// draw spheres at the side trace hit locations for debugging
+		if (CachedLeftSideHit)
+		{
+			DrawDebugSphere(GetWorld(), CachedLeftSideHitLocation, 10.f, 12, FColor::Yellow, false, 5.0f);
+			DrawDebugSphere(GetWorld(), CachedLeftSideWarpLocation, 10.f, 12, FColor::Cyan, false, 5.0f);
+		}
+		if (CachedRightSideHit)
+		{
+			DrawDebugSphere(GetWorld(), CachedRightSideHitLocation, 10.f, 12, FColor::Yellow, false, 5.0f);
+			DrawDebugSphere(GetWorld(), CachedRightSideWarpLocation, 10.f, 12, FColor::Cyan, false, 5.0f);
+		}
 	}
 }
 

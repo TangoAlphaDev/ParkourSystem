@@ -148,32 +148,27 @@ void UCarbonGameplayAbility_Parkour::ActivateAbility(
 void UCarbonGameplayAbility_Parkour::OnMontageCompleted()
 {
 	UE_LOG(LogTemp, Warning, TEXT("Parkour montage completed"));
-	
-	// Reset movement mode to walking after montage completes or is cancelled to restore normal character movement
+
 	if (ALyraCharacter* LyraChar = Cast<ALyraCharacter>(CurrentActorInfo->AvatarActor.Get()))
 	{
 		if (UCharacterMovementComponent* MoveComp = LyraChar->GetCharacterMovement())
 		{
-			if (AbilityFalling)
-			{
-				MoveComp->SetMovementMode(MOVE_Falling);
-				AbilityFalling = false; // Reset the flag after setting movement mode
-			}
-			else
+			// Do not force walking here.
+			if (!AbilityFalling && MoveComp->MovementMode != MOVE_Falling)
 			{
 				MoveComp->SetMovementMode(MOVE_Walking);
 			}
 		}
 	}
-	
-	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, false, false);
+
+	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
 }
 
 void UCarbonGameplayAbility_Parkour::OnMontageCancelled()
 {
 	UE_LOG(LogTemp, Warning, TEXT("Parkour montage cancelled"));
 
-	// Reset movement mode to walking after montage completes or is cancelled to restore normal character movement
+	// Reset movement mode to walking after montage completes or is cancelled
 	if (ALyraCharacter* LyraChar = Cast<ALyraCharacter>(CurrentActorInfo->AvatarActor.Get()))
 	{
 		if (UCharacterMovementComponent* MoveComp = LyraChar->GetCharacterMovement())

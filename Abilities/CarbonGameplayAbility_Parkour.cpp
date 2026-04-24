@@ -141,6 +141,8 @@ void UCarbonGameplayAbility_Parkour::ActivateAbility(
 	UE_LOG(LogTemp, Warning, TEXT("Warp Mid=%s Loc=%s"), *Solution.WarpTargetMiddle.ToString(), *Solution.WarpTransformMid.GetLocation().ToString());
 
 	UE_LOG(LogTemp, Warning, TEXT("Warp End=%s Loc=%s"), *Solution.WarpTargetEnd.ToString(), *Solution.WarpTransformEnd.GetLocation().ToString());
+	
+	UE_LOG(LogTemp, Warning, TEXT("Warp TicTac=%s Loc=%s"), *Solution.WarpTargetTicTac.ToString(), *Solution.WarpTransformTicTac.GetLocation().ToString());
 }
 
 
@@ -192,9 +194,13 @@ void UCarbonGameplayAbility_Parkour::OnMontageCancelled()
 // Function to apply motion warping targets based on the parkour solution
 void UCarbonGameplayAbility_Parkour::ApplyWarpTargets(ALyraCharacter* Character, const FCarbonParkourSolution& Solution)
 {
+	UE_LOG(LogTemp, Warning, TEXT("Applying warp targets."));
+	
 	if (!Character) return;
 
 	UMotionWarpingComponent* MotionWarpComp = Character->FindComponentByClass<UMotionWarpingComponent>();
+
+	UE_LOG(LogTemp, Warning, TEXT("Applying warp targets. MotionWarp=%s"), MotionWarpComp ? TEXT("YES") : TEXT("NO"));
 
 	if (!MotionWarpComp) return;
 

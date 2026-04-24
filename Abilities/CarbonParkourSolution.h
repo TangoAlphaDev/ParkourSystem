@@ -42,6 +42,7 @@ public:
 	UPROPERTY(BlueprintReadOnly)
 	FVector TargetTransformEnd = FVector::ZeroVector;
 
+	// Warp transforms for motion warping
 	UPROPERTY(BlueprintReadOnly)
 	FTransform WarpTransformStart = FTransform::Identity;
 
@@ -75,6 +76,9 @@ public:
 	FTransform WarpTransformTicTac = FTransform::Identity;
 
 	UPROPERTY(BlueprintReadOnly)
+	FVector TargetTransformTicTac = FVector::ZeroVector;
+	
+	UPROPERTY(BlueprintReadOnly)
 	bool bLeftSideHit = false;
 
 	UPROPERTY(BlueprintReadOnly)
@@ -102,6 +106,7 @@ public:
 		TargetTransformStart = FVector::ZeroVector;
 		TargetTransformMid = FVector::ZeroVector;
 		TargetTransformEnd = FVector::ZeroVector;
+		TargetTransformTicTac = FVector::ZeroVector;
 		WarpTransformStart = FTransform::Identity;
 		WarpTransformMid = FTransform::Identity;
 		WarpTransformEnd = FTransform::Identity;

@@ -36,10 +36,28 @@ protected:
 	// Traces for Parkour detection parameters
 	// Max distance to search for an obstacle
 	UPROPERTY(EditAnywhere, Category="Parkour|Trace")
-	float TraceDistance = 250.f;
+	float DefaultTraceDistance = 200.f;
 
 	UPROPERTY(EditAnywhere, Category="Parkour|Trace")
-	float SideTraceDistance = 100.f;
+	float RunningTraceDistance = 350.f;
+
+	UPROPERTY(EditAnywhere, Category="Parkour|Trace")
+	float DepthTraceDistance = 325.f;
+
+	UPROPERTY(EditAnywhere, Category="Parkour|Trace")
+	float SideTraceDistance = 150.f;
+
+	// Speed required to trigger running traces
+	UPROPERTY(EditAnywhere, Category="Parkour|Trace")
+	float SpeedThreshold = 150.f;
+
+	// Tic-Tac adjustment distance threshold
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|Trace")
+	float SideOffsetAdjustment = 80.0f;
+
+	// Landing distance
+	UPROPERTY(EditAnywhere, Category="Parkour|Trace")
+	float LandTraceDistance = 150.f;
 
 	// Height above character to start downward traces
 	UPROPERTY(EditAnywhere, Category="Parkour|Trace")
@@ -55,10 +73,10 @@ protected:
 	float ObjectDepthShort = 50.f;
 
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
-	float ObjectDepthMedium = 175.f;
+	float ObjectDepthMedium = 201.f;
 
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
-	float ObjectDepthLong = 250.f;
+	float ObjectDepthLong = 305.f;
 	
 	// Height thresholds (for tuning)
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
@@ -75,10 +93,6 @@ protected:
 	
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
 	float MaxDoubleClimbObjectHeight = 400.f;
-
-	// Fine-tuning adjustment for side trace hit location
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|Trace")
-	float SideTraceAdjustment = 45.0f;
 
 private:
 
@@ -97,8 +111,14 @@ private:
 	// Function to validate side hit based on normals
 	void ValidateSideHits();
 
+	// Function to determine trace distance based on character speed
+	float GetTraceDistance() const;
+
 	// Function to pick vault type based on trace results
 	ECarbonParkourType ClassifyParkourType();
+
+	// Functions to cache Tic-Tac results to build parkour solution
+	void AdjustCachedTicTacLocations(float SideOffsetAdjustment);
 
 	// Capsule shape
 	float TraceCapsuleHalfHeight = 200.f;
@@ -112,19 +132,20 @@ private:
 	FHitResult CachedLandHeightHit;
 
 	// Side traces
-	UE::Math::TVector<double> CachedLeftSideHitLocation;
-	UE::Math::TVector<double> CachedRightSideHitLocation;
-	UE::Math::TVector<double> CachedLeftSideWarpLocation;
-	UE::Math::TVector<double> CachedRightSideWarpLocation;
+	FHitResult CachedLeftSideHit;
+	FHitResult CachedRightSideHit;
 
+	// Bool to check if tic-tac is within distance
+	bool bTicTacHitDistance = false;
+	
+	// Cached adjusted locations for side traces
 	UE::Math::TRotator<double> CachedLeftSideRotation;
 	UE::Math::TRotator<double> CachedRightSideRotation;
 
-	bool CachedLeftSideHit = false;
-	bool CachedRightSideHit = false;
+	FVector CachedTicTacHitLocation;
 
-	FVector CachedLeftSideNormal;
-	FVector CachedRightSideNormal;
+	// Bool for setting tic-tac offset
+	bool bTicTacOffset;
 
 	// Cached obstacle measurements
 	TArray<float> CachedObjectHeights;

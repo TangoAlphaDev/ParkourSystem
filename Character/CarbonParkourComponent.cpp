@@ -16,8 +16,9 @@ void UCarbonParkourComponent::VaultSolution()
 	// Clear cached trace results
 	CachedForwardHit = FHitResult();
 	CachedBackwardHit = FHitResult();
-	CachedInitHeightHit = FHitResult();
-	CachedEndHeightHit = FHitResult();
+	CachedStartHeightHit = FHitResult();
+	CachedLedgeHeightHit = FHitResult();
+	CachedMidHeightHit = FHitResult();
 	CachedLandHeightHit = FHitResult();
 	CachedLeftSideHit = FHitResult();
 	CachedRightSideHit = FHitResult();
@@ -29,6 +30,9 @@ void UCarbonParkourComponent::VaultSolution()
 	CachedParkourSolution.Reset();
 	bTicTacHitDistance = false;
 	bTicTacOffset = false;
+	bClimbLedge = false;
+
+	OwnerChar = Cast<ACharacter>(GetOwner());
 
 	// Run traces
 	SideTrace(true); // Left side
@@ -38,12 +42,6 @@ void UCarbonParkourComponent::VaultSolution()
 
 	ValidateSideHits();
 
-	// Select the animation type
-	//ECarbonParkourType ParkourType = ClassifyParkourType();
-
-	// Log the parkour type
-	//UE_LOG(LogTemp, Warning, TEXT("Parkour Type: %s"), *UEnum::GetValueAsString(ParkourType));
-
 	// Build parkour solution
 	BuildParkourSolution();
 }
@@ -52,8 +50,8 @@ void UCarbonParkourComponent::VaultSolution()
 // Side trace to check for space on sides of obstacle
 bool UCarbonParkourComponent::SideTrace(bool bLeftSide)
 {
-	ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
-	if (!OwnerChar)
+	//ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
+	if (!OwnerChar.IsValid())
 	{
 		return false;
 	}
@@ -67,7 +65,7 @@ bool UCarbonParkourComponent::SideTrace(bool bLeftSide)
 	const FVector StartLocation = OwnerChar->GetActorLocation();
 	const FVector EndLocation = StartLocation + (ForwardVector * 150.f) + FVector(0.f, 0.f, 45.f) + (TraceDirection * SideTraceDistance);
 
-	FCollisionQueryParams TraceParams(FName(TEXT("ParkourSideTrace")), true, OwnerChar);
+	FCollisionQueryParams TraceParams(FName(TEXT("ParkourSideTrace")), true, (OwnerChar.Get()));
 	TraceParams.bReturnPhysicalMaterial = false;
 
 	// Perform the line trace
@@ -124,8 +122,8 @@ bool UCarbonParkourComponent::SideTrace(bool bLeftSide)
 void UCarbonParkourComponent::DepthTrace()
 {
 	// Get owner character
-    ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
-    if (!OwnerChar)
+    //ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
+    if (!OwnerChar.IsValid())
     {
         return;
     }
@@ -145,7 +143,7 @@ void UCarbonParkourComponent::DepthTrace()
 	const float TraceDistance = GetTraceDistance();
     FVector EndLocation = StartLocation + (ForwardVector * TraceDistance);
 	
-    FCollisionQueryParams TraceParams(FName(TEXT("ParkourDepthTrace")), true, OwnerChar);
+    FCollisionQueryParams TraceParams(FName(TEXT("ParkourDepthTrace")), true, OwnerChar.Get());
     TraceParams.bReturnPhysicalMaterial = false;
 
 	// Ignore all LyraCharacter instances
@@ -253,8 +251,8 @@ void UCarbonParkourComponent::DepthTrace()
 // Run multiple height traces to find obstacle height and height of ground beyond obstacle too
 void UCarbonParkourComponent::RunHeightTraces()
 {
-    ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
-    if (!OwnerChar || !CachedForwardHit.bBlockingHit)
+    //ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
+    if (!OwnerChar.IsValid() || !CachedForwardHit.bBlockingHit)
     {
         return;
     }
@@ -275,25 +273,30 @@ void UCarbonParkourComponent::RunHeightTraces()
     StartLocation.Z = CapsuleBottomZ + DownTraceStartHeight;
 
     // Initial trace at character location
-    HeightTrace(StartLocation, CachedInitHeightHit, FColor::Red);
+    HeightTrace(StartLocation, CachedStartHeightHit);
 
-    // Trace in the middle of the object for height, calculate midpoint between CachedForwardHit and CachedBackwardHit
-    FVector MidpointLocation = (CachedForwardHit.Location + CachedBackwardHit.Location) * 0.5f;
-    MidpointLocation.Z = CapsuleBottomZ + DownTraceStartHeight; // Get the same Z height as the initial trace
-    HeightTrace(MidpointLocation, CachedEndHeightHit, FColor::Green);
+    // Trace at the very front of the obstacle for height
+	FVector FrontLocation = CachedForwardHit.ImpactPoint;
+	FrontLocation.Z = CapsuleBottomZ + DownTraceStartHeight; // Get the height at the front of the trace
+	HeightTrace(FrontLocation, CachedLedgeHeightHit);
 
-    // Calculate a point slightly beyond the forward hit location to check for landing surface
+	// Trace at the back of the obstacle
+	FVector MidpointLocation = CachedBackwardHit.ImpactPoint;
+	MidpointLocation.Z = CapsuleBottomZ + DownTraceStartHeight;
+	HeightTrace(MidpointLocation, CachedMidHeightHit); // Get the height at the back of the obstacle
+	
+    // Calculate a point slightly beyond the back hit location to check for landing surface
     FVector LandLocation = CachedBackwardHit.Location + (ForwardVector * LandTraceDistance);
     LandLocation.Z = CapsuleBottomZ + DownTraceStartHeight; // Get the same Z height as the initial trace
-    HeightTrace(LandLocation, CachedLandHeightHit, FColor::Blue);
+    HeightTrace(LandLocation, CachedLandHeightHit);
 }
 
 
 // The height trace subroutine
-void UCarbonParkourComponent::HeightTrace(const FVector& StartLocation, FHitResult& CachedHitResult, FColor DebugColor)
+void UCarbonParkourComponent::HeightTrace(const FVector& StartLocation, FHitResult& CachedHitResult)
 {
-	ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
-	if (!OwnerChar)
+	//ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
+	if (!OwnerChar.IsValid())
 	{
 		return;
 	}
@@ -304,7 +307,7 @@ void UCarbonParkourComponent::HeightTrace(const FVector& StartLocation, FHitResu
 	// Get the ground offset to adjust the trace for character height
 	GetGroundOffset();
 
-	FCollisionQueryParams TraceParams(FName(TEXT("ParkourHeightTrace")), true, OwnerChar);
+	FCollisionQueryParams TraceParams(FName(TEXT("ParkourHeightTrace")), true, OwnerChar.Get());
 	TraceParams.bReturnPhysicalMaterial = false;
 	
 	// Ignore all LyraCharacter instances
@@ -335,7 +338,7 @@ void UCarbonParkourComponent::HeightTrace(const FVector& StartLocation, FHitResu
 
 		if (bDebugTraces)
 		{
-			DrawDebugLine(GetWorld(), StartLocation, HitResult.Location, DebugColor, false, 2.0f);
+			DrawDebugLine(GetWorld(), StartLocation, HitResult.Location, FColor::Green, false, 2.0f);
 			DrawDebugPoint(GetWorld(), HitResult.Location, 10.f, FColor::Blue, false, 2.0f);
 		}
 	}
@@ -353,8 +356,8 @@ void UCarbonParkourComponent::HeightTrace(const FVector& StartLocation, FHitResu
 // Get the capsule offset from the ground
 float UCarbonParkourComponent::GetGroundOffset()
 {
-    ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
-    if (!OwnerChar)
+    //ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
+    if (!OwnerChar.IsValid())
     {
         return 0.f;
     }
@@ -373,7 +376,7 @@ float UCarbonParkourComponent::GetGroundOffset()
     // End location directly below the capsule
     FVector EndLocation = StartLocation - FVector(0.f, 0.f, DownTraceStartHeight);
 
-    FCollisionQueryParams TraceParams(FName(TEXT("GroundOffsetTrace")), true, OwnerChar);
+    FCollisionQueryParams TraceParams(FName(TEXT("GroundOffsetTrace")), true, OwnerChar.Get());
     TraceParams.bReturnPhysicalMaterial = false;
 
     FHitResult HitResult;
@@ -432,8 +435,8 @@ void UCarbonParkourComponent::ValidateSideHits()
 // Determine trace distance based on character speed and tic tac eligibility
 float UCarbonParkourComponent::GetTraceDistance() const
 {
-	const ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
-	if (!OwnerChar)
+	//const ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
+	if (!OwnerChar.IsValid())
 	{
 		return DefaultTraceDistance;
 	}
@@ -466,23 +469,27 @@ ECarbonParkourType UCarbonParkourComponent::ClassifyParkourType()
     }
 
     float ObjectHeight = CachedObjectHeights[1];
-    if (ObjectHeight < MaxStepHeight)
+    if (ObjectHeight <= MaxStepHeight)
     {
-        return CachedObjectDepth < ObjectDepthMedium ? ECarbonParkourType::Step : ECarbonParkourType::StepOn;
+        if (CachedObjectDepth <= ObjectDepthMedium) return ECarbonParkourType::Step;
+    	return ECarbonParkourType::StepOn;
     }
-    if (ObjectHeight < MaxVaultHeight)
+    if (ObjectHeight <= MaxVaultHeight)
     {
 		// Low height tic-tac ok, the animation seems to work. if not, see the bTicTacHitDistance logic below
-    	if (CachedLeftSideHit.bBlockingHit) return ECarbonParkourType::TicTacVaultLeft;
-    	if (CachedRightSideHit.bBlockingHit) return ECarbonParkourType::TicTacVaultRight;
+    	bTicTacOffset = true;
+    	if (CachedLeftSideHit.bBlockingHit) return ECarbonParkourType::VaultTicTacLeft;
+    	if (CachedRightSideHit.bBlockingHit) return ECarbonParkourType::VaultTicTacRight;
 
-        if (CachedObjectDepth < ObjectDepthShort) return ECarbonParkourType::VaultShort;
-        if (CachedObjectDepth < ObjectDepthMedium) return ECarbonParkourType::VaultMedium;
-        if (CachedObjectDepth < ObjectDepthLong) return ECarbonParkourType::VaultLong;
-
-        return ECarbonParkourType::VaultOn;
+    	bTicTacOffset = false;
+    	if (CachedObjectDepth <= ObjectDepthXShort) return ECarbonParkourType::VaultXShort;
+        if (CachedObjectDepth <= ObjectDepthShort) return ECarbonParkourType::VaultShort;
+        if (CachedObjectDepth <= ObjectDepthMedium) return ECarbonParkourType::VaultMedium;
+        if (CachedObjectDepth <= ObjectDepthLong) return ECarbonParkourType::VaultLong;
+    	return ECarbonParkourType::VaultOn;
+       
     }
-    if (ObjectHeight < MaxHighVaultHeight)
+    if (ObjectHeight <= MaxHighVaultHeight)
     {
     	CachedParkourSolution.bShouldFall = true; // Falling for high vaults
     	if (bTicTacHitDistance) // Check if tic-tac is allowed
@@ -490,31 +497,37 @@ ECarbonParkourType UCarbonParkourComponent::ClassifyParkourType()
     		if (CachedLeftSideHit.bBlockingHit)
     		{
     			bTicTacOffset = true;
-    			return ECarbonParkourType::TicTacHighLeft;
+    			if (CachedObjectDepth <= ObjectDepthShort) return ECarbonParkourType::TicTacLeft;
+    			CachedParkourSolution.bShouldFall = false;
+				return ECarbonParkourType::TicTacLeftOn;
     		}
     		if (CachedRightSideHit.bBlockingHit)
     		{
     			bTicTacOffset = true;
-    			return ECarbonParkourType::TicTacHighRight;
+    			if (CachedObjectDepth <= ObjectDepthShort) return ECarbonParkourType::TicTacRight;
+    			CachedParkourSolution.bShouldFall = false;
+    			return ECarbonParkourType::TicTacRightOn;
     		}
     	}
         else
         {
-        	bTicTacOffset = false;
-        	if (CachedObjectDepth < ObjectDepthMedium)
-        	{
-        		return ECarbonParkourType::VaultHigh;
-        	}
-        	else
-        	{
-        		CachedParkourSolution.bShouldFall = false; // Don't fall if vaulting on taller objects
-        		return ECarbonParkourType::VaultHighOn;
-        	}
+			if (CachedObjectDepth <= ObjectDepthXShort) return ECarbonParkourType::VaultHighXShort;
+        	if (CachedObjectDepth <= ObjectDepthShort) return ECarbonParkourType::VaultHighShort;
+        	
+       		CachedParkourSolution.bShouldFall = false;
+       		return ECarbonParkourType::VaultHighOn;
         }
     }
-    if (ObjectHeight < MaxClimbObjectHeight) return ECarbonParkourType::ClimbUpLow;
-    if (ObjectHeight < MaxDoubleClimbObjectHeight) return ECarbonParkourType::ClimbUpHigh;
 
+	bClimbLedge = true;
+    if (ObjectHeight <= MaxClimbObjectHeight)
+    {
+    	if (CachedObjectDepth <= ObjectDepthShort) return ECarbonParkourType::WallRunOver;
+	    return ECarbonParkourType::WallRunOn;
+    }
+
+	bClimbLedge = false;
+	bTicTacOffset = false;
     return ECarbonParkourType::None;
 }
 
@@ -538,8 +551,22 @@ void UCarbonParkourComponent::AdjustCachedTicTacLocations(float AdjustmentValue)
 
 	// This sets the target to exactly DesiredWallDistance away from the wall.
 	CachedTicTacHitLocation = SideHit.ImpactPoint + (WallNormal * AdjustmentValue);
-	CachedEndHeightHit.ImpactPoint += WallNormal * AdjustmentValue;
+	CachedMidHeightHit.ImpactPoint += WallNormal * AdjustmentValue;
 	CachedLandHeightHit.ImpactPoint += WallNormal * AdjustmentValue;
+}
+
+
+// Function to adjust the cached ledge hit location
+void UCarbonParkourComponent::AdjustCachedLedgeLocations(float AdjustmentYValue, float AdjustmentZValue)
+{
+	if (!CachedLedgeHeightHit.bBlockingHit)
+	{
+		return; // No adjustment needed
+	}
+
+	// Sets cached location away from the wall
+	CachedLedgeHeightHit.ImpactPoint -= OwnerChar->GetActorForwardVector() * AdjustmentYValue;
+	CachedLedgeHeightHit.ImpactPoint.Z -= AdjustmentZValue;
 }
 
 
@@ -568,8 +595,8 @@ void UCarbonParkourComponent::BuildParkourSolution()
 	Solution.ParkourType = ParkourType;
 
 	// Validate owner character
-	ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
-	if (!OwnerChar)
+	//ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
+	if (!OwnerChar.IsValid())
 	{
 		return; // Ensure the owner is valid before proceeding
 	}
@@ -577,34 +604,42 @@ void UCarbonParkourComponent::BuildParkourSolution()
 	// Apply tic-tac offset adjustment to the cached hit locations if needed
 	if (bTicTacOffset)
 	{
-		FVector Direction = CachedLeftSideHit.bBlockingHit ? -OwnerChar->GetActorRightVector() : OwnerChar->GetActorRightVector();
+		//FVector Direction = CachedLeftSideHit.bBlockingHit ? -OwnerChar->GetActorRightVector() : OwnerChar->GetActorRightVector();
 		AdjustCachedTicTacLocations(SideOffsetAdjustment);
 	}
 
-	// Warp target names
+	if (bClimbLedge)
+	{
+		AdjustCachedLedgeLocations(LedgeOffsetYAdjustment, LedgeOffsetZAdjustment);
+	}
+	
+	// Apply motion warping logic
 	Solution.WarpTargetStart = TEXT("ParkourTargetStart");
+	Solution.WarpTargetLedge = TEXT("ParkourTargetLedge");
 	Solution.WarpTargetMiddle = TEXT("ParkourTargetMid");
-	Solution.WarpTargetEnd = TEXT("ParkourTargetEnd");
+	Solution.WarpTargetLand = TEXT("ParkourTargetLand");
 	Solution.WarpTargetTicTac = TEXT("ParkourTargetTicTac");
 
 	// Surface data
 	Solution.SurfaceNormal = CachedForwardHit.ImpactNormal;
 
 	// Obstacle metrics
-	Solution.ObstacleDistance = FVector::Dist(FVector(CachedForwardHit.ImpactPoint.X, CachedForwardHit.ImpactPoint.Y, 0.0f), FVector(CachedInitHeightHit.ImpactPoint.X, CachedInitHeightHit.ImpactPoint.Y, 0.0f));
-	Solution.ObstacleHeight = CachedInitHeightHit.ImpactPoint.Z - CachedEndHeightHit.ImpactPoint.Z;
+	Solution.ObstacleDistance = FVector::Dist(FVector(CachedForwardHit.ImpactPoint.X, CachedForwardHit.ImpactPoint.Y, 0.0f), FVector(CachedStartHeightHit.ImpactPoint.X, CachedStartHeightHit.ImpactPoint.Y, 0.0f));
+	Solution.ObstacleHeight = CachedStartHeightHit.ImpactPoint.Z - CachedMidHeightHit.ImpactPoint.Z;
 	Solution.ObstacleLength = FVector::Dist(CachedForwardHit.ImpactPoint, CachedBackwardHit.ImpactPoint);
 
 	// Compute warp locations
-	FVector Start = CachedInitHeightHit.ImpactPoint;
-	FVector Mid = CachedEndHeightHit.ImpactPoint;
-	FVector End = CachedLandHeightHit.ImpactPoint;
+	FVector Start = CachedStartHeightHit.ImpactPoint;
+	FVector Ledge = CachedLedgeHeightHit.ImpactPoint;
+	FVector Mid = CachedMidHeightHit.ImpactPoint;
+	FVector Land = CachedLandHeightHit.ImpactPoint;
 	FVector TicTac = CachedTicTacHitLocation;
 
 	// Cache target locations in solution struct for use in ability
 	Solution.TargetTransformStart = Start;
+	Solution.TargetTransformLedge = Ledge;
 	Solution.TargetTransformMid = Mid;
-	Solution.TargetTransformEnd = End;
+	Solution.TargetTransformLand = Land;
 	Solution.TargetTransformTicTac = TicTac;
 
 	// Build transforms
@@ -612,8 +647,9 @@ void UCarbonParkourComponent::BuildParkourSolution()
 
 	// Note: The rotation is based on the negative impact normal to orient the character facing towards the obstacle, and using the world up vector to keep the character upright. Adjust as needed for specific animation requirements.
 	Solution.WarpTransformStart = FTransform(WarpRotation, Start);
+	Solution.WarpTransformLedge = FTransform(WarpRotation, Ledge);
 	Solution.WarpTransformMid = FTransform(WarpRotation, Mid);
-	Solution.WarpTransformEnd = FTransform(WarpRotation, End);
+	Solution.WarpTransformLand = FTransform(WarpRotation, Land);
 	Solution.WarpTransformTicTac = FTransform(WarpRotation, TicTac);
 
 	// Add side trace results
@@ -630,8 +666,9 @@ void UCarbonParkourComponent::BuildParkourSolution()
 	{
 		// draw spheres at the warp target locations for debugging
 		DrawDebugSphere(GetWorld(), Start, 10.f, 12, FColor::Red, false, 5.0f);
-		DrawDebugSphere(GetWorld(), Mid, 10.f, 12, FColor::Green, false, 5.0f);
-		DrawDebugSphere(GetWorld(), End, 10.f, 12, FColor::Blue, false, 5.0f);
+		DrawDebugSphere(GetWorld(), Ledge, 10.f, 12, FColor::Green, false, 5.0f);
+		DrawDebugSphere(GetWorld(), Mid, 10.f, 12, FColor::Cyan, false, 5.0f);
+		DrawDebugSphere(GetWorld(), Land, 10.f, 12, FColor::Blue, false, 5.0f);
 
 		// draw spheres at the side trace hit locations for debugging
 		if (CachedLeftSideHit.bBlockingHit)

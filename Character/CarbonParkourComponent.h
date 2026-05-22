@@ -15,7 +15,6 @@ class LYRAGAME_API UCarbonParkourComponent : public UActorComponent
 public:
 	
 	// Run traces for parkour detection
-	UFUNCTION(BlueprintCallable, Category="Carbon|Parkour")
 	void VaultSolution();
 
 	// Build parkour solution based on trace results
@@ -31,6 +30,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|Debug")
 	bool bDebugSpheres = false;
 
+	// Turn on or off motion warping
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|MotionWarping")
+	bool bEnableMotionWarping = true;
+
 protected:
 
 	// Traces for Parkour detection parameters
@@ -42,18 +45,14 @@ protected:
 	float RunningTraceDistance = 350.f;
 
 	UPROPERTY(EditAnywhere, Category="Parkour|Trace")
-	float DepthTraceDistance = 325.f;
+	float DepthTraceDistance = 450.f;
 
 	UPROPERTY(EditAnywhere, Category="Parkour|Trace")
 	float SideTraceDistance = 150.f;
 
 	// Speed required to trigger running traces
-	UPROPERTY(EditAnywhere, Category="Parkour|Trace")
-	float SpeedThreshold = 150.f;
-
-	// Tic-Tac adjustment distance threshold
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|Trace")
-	float SideOffsetAdjustment = 80.0f;
+	float SpeedThreshold = 450.f;
 
 	// Landing distance
 	UPROPERTY(EditAnywhere, Category="Parkour|Trace")
@@ -70,36 +69,49 @@ protected:
 	// Vault height distances
 	// Depth thresholds (for tuning)
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
-	float ObjectDepthShort = 50.f;
+	float ObjectDepthXShort = 35.f;
+	
+	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
+	float ObjectDepthShort = 60.f;
 
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
-	float ObjectDepthMedium = 201.f;
+	float ObjectDepthMedium = 100.f;
 
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
-	float ObjectDepthLong = 305.f;
+	float ObjectDepthLong = 250.f;
 	
 	// Height thresholds (for tuning)
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
 	float MaxStepHeight = 60.f;
 
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
-	float MaxVaultHeight = 150.f;
+	float MaxVaultHeight = 100.f;
 
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
-	float MaxHighVaultHeight = 201.f;
+	float MaxHighVaultHeight = 250.f;
 
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
-	float MaxClimbObjectHeight = 301.f;
+	float MaxClimbObjectHeight = 350.f;
 	
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
-	float MaxDoubleClimbObjectHeight = 400.f;
+	float MaxDoubleClimbObjectHeight = 500.f;
+
+	// Warp adjustment values
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|Adjustment")
+	float SideOffsetAdjustment = 80.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|Adjustment")
+	float LedgeOffsetYAdjustment = 50.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|Adjustment")
+	float LedgeOffsetZAdjustment = 125.0f;
 
 private:
 
 	// Functions to run individual traces
 	void DepthTrace();
 
-	void HeightTrace(const FVector& StartLocation, FHitResult& CachedHitResult, FColor DebugColor);
+	void HeightTrace(const FVector& StartLocation, FHitResult& CachedHitResult);
 	
 	void RunHeightTraces();
 	
@@ -117,8 +129,13 @@ private:
 	// Function to pick vault type based on trace results
 	ECarbonParkourType ClassifyParkourType();
 
-	// Functions to cache Tic-Tac results to build parkour solution
-	void AdjustCachedTicTacLocations(float SideOffsetAdjustment);
+	// Function to cached Tic-Tac results
+	void AdjustCachedTicTacLocations(float AdjustmentValue);
+
+	// Function to adjust cached ledge hit location
+	void AdjustCachedLedgeLocations(float AdjustmentYValue, float AdjustmentZValue);
+
+	TWeakObjectPtr<ACharacter> OwnerChar = nullptr;
 
 	// Capsule shape
 	float TraceCapsuleHalfHeight = 200.f;
@@ -127,8 +144,9 @@ private:
 	// Cached trace results
 	FHitResult CachedForwardHit;
 	FHitResult CachedBackwardHit;
-	FHitResult CachedInitHeightHit;
-	FHitResult CachedEndHeightHit; 
+	FHitResult CachedStartHeightHit;
+	FHitResult CachedLedgeHeightHit;
+	FHitResult CachedMidHeightHit; 
 	FHitResult CachedLandHeightHit;
 
 	// Side traces
@@ -146,6 +164,9 @@ private:
 
 	// Bool for setting tic-tac offset
 	bool bTicTacOffset;
+
+	// Bool for climbing ledge
+	bool bClimbLedge = false;
 
 	// Cached obstacle measurements
 	TArray<float> CachedObjectHeights;

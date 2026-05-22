@@ -20,37 +20,18 @@ public:
 	UPROPERTY(BlueprintReadOnly)
 	ECarbonParkourType ParkourType = ECarbonParkourType::None;
 
-	// Name of the motion warp targets
+	// Vault data
+	// Name of the motion warp target
 	UPROPERTY(BlueprintReadOnly)
-	FName WarpTargetStart = NAME_None;
+	FName WarpTargetLedge = NAME_None;
 
+	// Transform location
 	UPROPERTY(BlueprintReadOnly)
-	FName WarpTargetMiddle = NAME_None;
-
+	FVector TargetTransformLedge = FVector::ZeroVector;
+	
+	// Warp transform for motion warping
 	UPROPERTY(BlueprintReadOnly)
-	FName WarpTargetEnd = NAME_None;
-
-	// Transform start location
-	UPROPERTY(BlueprintReadOnly)
-	FVector TargetTransformStart = FVector::ZeroVector;
-
-	// Transform middle location (if needed)
-	UPROPERTY(BlueprintReadOnly)
-	FVector TargetTransformMid = FVector::ZeroVector;
-
-	// Transform end location
-	UPROPERTY(BlueprintReadOnly)
-	FVector TargetTransformEnd = FVector::ZeroVector;
-
-	// Warp transforms for motion warping
-	UPROPERTY(BlueprintReadOnly)
-	FTransform WarpTransformStart = FTransform::Identity;
-
-	UPROPERTY(BlueprintReadOnly)
-	FTransform WarpTransformMid = FTransform::Identity;
-
-	UPROPERTY(BlueprintReadOnly)
-	FTransform WarpTransformEnd = FTransform::Identity;
+	FTransform WarpTransformLedge = FTransform::Identity;
 
 	// Distance to the obstacle at chosen sample point
 	UPROPERTY(BlueprintReadOnly)
@@ -79,16 +60,44 @@ public:
 	FVector TargetTransformTicTac = FVector::ZeroVector;
 	
 	UPROPERTY(BlueprintReadOnly)
-	bool bLeftSideHit = false;
+	bool bLeftTicTacHit = false;
 
 	UPROPERTY(BlueprintReadOnly)
-	bool bRightSideHit = false;
+	bool bRightTicTacHit = false;
 
 	UPROPERTY(BlueprintReadOnly)
-	FRotator LeftSideRotation = FRotator::ZeroRotator;
+	FVector SideSurfaceNormal = FVector::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly)
-	FRotator RightSideRotation = FRotator::ZeroRotator;
+	FRotator LeftTicTacRotation = FRotator::ZeroRotator;
+
+	UPROPERTY(BlueprintReadOnly)
+	FRotator RightTicTacRotation = FRotator::ZeroRotator;
+
+	// Wall Run Data
+	UPROPERTY(BlueprintReadOnly)
+	FName WarpTargetWallRun = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly)
+	FVector TargetTransformWallRun = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly)
+	FTransform WarpTransformWallRun = FTransform::Identity;
+
+	UPROPERTY(BlueprintReadOnly)
+	bool bLeftRunHit = false;
+
+	UPROPERTY(BlueprintReadOnly)
+	bool bRightRunHit = false;
+
+	UPROPERTY(BlueprintReadOnly)
+	FVector RunSurfaceNormal = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly)
+	FRotator LeftRunRotation = FRotator::ZeroRotator;
+
+	UPROPERTY(BlueprintReadOnly)
+	FRotator RightRunRotation = FRotator::ZeroRotator;
 
 	// Bool to select movement state after object
 	UPROPERTY(BlueprintReadOnly)
@@ -99,21 +108,37 @@ public:
 	{
 		bIsValid = false;
 		ParkourType = ECarbonParkourType::None;
-		WarpTargetStart = NAME_None;
-		WarpTargetMiddle = NAME_None;
-		WarpTargetEnd = NAME_None;
+
+		WarpTargetLedge = NAME_None;
 		WarpTargetTicTac = NAME_None;
-		TargetTransformStart = FVector::ZeroVector;
-		TargetTransformMid = FVector::ZeroVector;
-		TargetTransformEnd = FVector::ZeroVector;
+		WarpTargetWallRun = NAME_None;
+
+		TargetTransformLedge = FVector::ZeroVector;
 		TargetTransformTicTac = FVector::ZeroVector;
-		WarpTransformStart = FTransform::Identity;
-		WarpTransformMid = FTransform::Identity;
-		WarpTransformEnd = FTransform::Identity;
+		TargetTransformWallRun = FVector::ZeroVector;
+
+		WarpTransformLedge = FTransform::Identity;
 		WarpTransformTicTac = FTransform::Identity;
-		
+		WarpTransformWallRun = FTransform::Identity;
+
 		ObstacleDistance = 0.0f;
 		ObstacleHeight = 0.0f;
+		ObstacleLength = 0.0f;
+
 		SurfaceNormal = FVector::ZeroVector;
+		SideSurfaceNormal = FVector::ZeroVector;
+		RunSurfaceNormal = FVector::ZeroVector;
+
+		bLeftTicTacHit = false;
+		bRightTicTacHit = false;
+		LeftTicTacRotation = FRotator::ZeroRotator;
+		RightTicTacRotation = FRotator::ZeroRotator;
+
+		bLeftRunHit = false;
+		bRightRunHit = false;
+		LeftRunRotation = FRotator::ZeroRotator;
+		RightRunRotation = FRotator::ZeroRotator;
+
+		bShouldFall = false;
 	}
 };

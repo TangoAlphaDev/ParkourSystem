@@ -9,25 +9,27 @@ enum class ECarbonParkourType : uint8
 {
 	None				UMETA(DisplayName="None"),
 
-	Step				UMETA(DisplayName="Step"),
-	StepOn				UMETA(DisplayName="Step On"),
-		
-	VaultShort			UMETA(DisplayName="Short Vault"),
-	VaultMedium			UMETA(DisplayName="Medium Vault"),
-	VaultLong			UMETA(DisplayName="Long Vault"),
+	VaultXShort			UMETA(DisplayName="Vault X Short"),
+	VaultShort			UMETA(DisplayName="Vault Short"),
+	VaultMedium			UMETA(DisplayName="Vault Medium"),
+	VaultLong			UMETA(DisplayName="Vault Long "),
 	VaultOn				UMETA(DisplayName="Vault On"),
 
-	TicTacVaultLeft		UMETA(DisplayName="Tic-Tac Left Vault"),
-	TicTacVaultRight	UMETA(DisplayName="Tic-Tac Right Vault"),
-	
-	VaultHigh			UMETA(DisplayName="High Vault"),
+	VaultTicTacLeft		UMETA(DisplayName="Vault Tic-Tac Left"),
+	VaultTicTacRight	UMETA(DisplayName="Vault Tic-Tac Right"),
+
+	VaultHighXShort		UMETA(DisplayName="Vault High X Short"),
+	VaultHighShort		UMETA(DisplayName="Vault High Short"),
 	VaultHighOn			UMETA(DisplayName="High Vault On"),
 	
-	TicTacHighLeft		UMETA(DisplayName="Tic-Tac High Left Vault"),
-	TicTacHighRight		UMETA(DisplayName="Tic-Tac High Right Vault"),
-	TicTacHighLeftOn	UMETA(DisplayName="Tic-Tac High Left On"),
-	TicTacHighRightOn	UMETA(DisplayName="Tic-Tac High Right On"),
+	TicTacLeft			UMETA(DisplayName="Tic-Tac Left"),
+	TicTacRight			UMETA(DisplayName="Tic-Tac Right"),
+	TicTacLeftOn		UMETA(DisplayName="Tic-Tac Left On"),
+	TicTacRightOn		UMETA(DisplayName="Tic-Tac Right On"),
 
-	ClimbUpLow			UMETA(DisplayName="Climb Up Low"),
-	ClimbUpHigh			UMETA(DisplayName="Climb Up High"),
+	WallRunLeft			UMETA(DisplayName="Wall Run Left"),
+	WallRunRight		UMETA(DisplayName="Wall Run Right"),
+
+	WallRunOver			UMETA(DisplayName="Wall Run Over"),
+	WallRunOn			UMETA(DisplayName="Wall Run On"),
 };

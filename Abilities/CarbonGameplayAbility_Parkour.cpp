@@ -54,16 +54,6 @@ void UCarbonGameplayAbility_Parkour::ActivateAbility(
 		return;
 	}
 
-	// Align the character to the wall based on side trace results
-	if (Solution.bLeftSideHit)
-	{
-		LyraChar->SetActorRotation(Solution.LeftSideRotation);
-	}
-	else if (Solution.bRightSideHit)
-	{
-		LyraChar->SetActorRotation(Solution.RightSideRotation);
-	}
-
 	// Set local bool
 	AbilityFalling = Solution.bShouldFall;
 
@@ -75,13 +65,17 @@ void UCarbonGameplayAbility_Parkour::ActivateAbility(
 		return;
 	}
 
-	// Get and validate montage
+	// Select montage based on parkour type and random selection if multiple montages are available
 	UAnimMontage* MontageToPlay = nullptr;
 	for (const FCarbonParkourMove& Move : ParkourData->Moves)
 	{
 		if (Move.ParkourType == Solution.ParkourType)
 		{
-			MontageToPlay = Move.Montage;
+			if (Move.Montages.Num() > 0)
+			{
+				int32 Index = FMath::RandRange(0, Move.Montages.Num() - 1);
+				MontageToPlay = Move.Montages[Index];
+			}
 			break;
 		}
 	}
@@ -94,7 +88,11 @@ void UCarbonGameplayAbility_Parkour::ActivateAbility(
 	}
 
 	// Apply warp targets before playing montage
-	ApplyWarpTargets(LyraChar, Solution);
+	if (ParkourComp->bEnableMotionWarping)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Applying warp targets before montage play"));
+		ApplyWarpTargets(LyraChar, Solution);
+	}
 
 	// Set movement mode to flying and stop movement to ensure proper montage play and warping (this is a test, may need adjustments based on actual character setup and desired behavior)
 	UCharacterMovementComponent* MoveComp = LyraChar->GetCharacterMovement();
@@ -136,13 +134,15 @@ void UCarbonGameplayAbility_Parkour::ActivateAbility(
 
 	UE_LOG(LogTemp, Warning, TEXT("Solution Valid=%d Type=%s"), Solution.bIsValid, *UEnum::GetValueAsString(Solution.ParkourType));
 
-	UE_LOG(LogTemp, Warning, TEXT("Warp Start=%s Loc=%s"), *Solution.WarpTargetStart.ToString(), *Solution.WarpTransformStart.GetLocation().ToString());
+	//UE_LOG(LogTemp, Warning, TEXT("Warp Start=%s Loc=%s"), *Solution.WarpTargetStart.ToString(), *Solution.WarpTransformStart.GetLocation().ToString());
 
-	UE_LOG(LogTemp, Warning, TEXT("Warp Mid=%s Loc=%s"), *Solution.WarpTargetMiddle.ToString(), *Solution.WarpTransformMid.GetLocation().ToString());
+	//UE_LOG(LogTemp, Warning, TEXT("Warp End=%s Loc=%s"), *Solution.WarpTargetLedge.ToString(), *Solution.WarpTransformLedge.GetLocation().ToString());
 
-	UE_LOG(LogTemp, Warning, TEXT("Warp End=%s Loc=%s"), *Solution.WarpTargetEnd.ToString(), *Solution.WarpTransformEnd.GetLocation().ToString());
+	//UE_LOG(LogTemp, Warning, TEXT("Warp Mid=%s Loc=%s"), *Solution.WarpTargetMiddle.ToString(), *Solution.WarpTransformMid.GetLocation().ToString());
+
+	//UE_LOG(LogTemp, Warning, TEXT("Warp Land=%s Loc=%s"), *Solution.WarpTargetLand.ToString(), *Solution.WarpTransformLand.GetLocation().ToString());
 	
-	UE_LOG(LogTemp, Warning, TEXT("Warp TicTac=%s Loc=%s"), *Solution.WarpTargetTicTac.ToString(), *Solution.WarpTransformTicTac.GetLocation().ToString());
+	//UE_LOG(LogTemp, Warning, TEXT("Warp TicTac=%s Loc=%s"), *Solution.WarpTargetTicTac.ToString(), *Solution.WarpTransformTicTac.GetLocation().ToString());
 }
 
 
@@ -204,13 +204,7 @@ void UCarbonGameplayAbility_Parkour::ApplyWarpTargets(ALyraCharacter* Character,
 
 	if (!MotionWarpComp) return;
 
-	// Add start warp target
-	MotionWarpComp->AddOrUpdateWarpTarget(FMotionWarpingTarget(
-		Solution.WarpTargetStart,
-		Solution.WarpTransformStart
-	));
-
-	// Add tic-tac warp target if specified
+	// Add warp targets if specified	
 	if (!Solution.WarpTargetTicTac.IsNone())
 	{
 		MotionWarpComp->AddOrUpdateWarpTarget(FMotionWarpingTarget(
@@ -219,24 +213,22 @@ void UCarbonGameplayAbility_Parkour::ApplyWarpTargets(ALyraCharacter* Character,
 		));
 	}
 
-	// Add middle warp target if specified
-	if (!Solution.WarpTargetMiddle.IsNone())
+	if (!Solution.WarpTargetLedge.IsNone())
 	{
 		MotionWarpComp->AddOrUpdateWarpTarget(FMotionWarpingTarget(
-			Solution.WarpTargetMiddle,
-			Solution.WarpTransformMid
+			Solution.WarpTargetLedge,
+			Solution.WarpTransformLedge
 		));
 	}
-
-	// Add end warp target
-	if (!Solution.WarpTargetEnd.IsNone())
+	
+	if (!Solution.WarpTargetWallRun.IsNone())
 	{
 		MotionWarpComp->AddOrUpdateWarpTarget(FMotionWarpingTarget(
-			Solution.WarpTargetEnd,
-			Solution.WarpTransformEnd
+			Solution.WarpTargetWallRun,
+			Solution.WarpTransformWallRun
 		));
 	}
-
+	
 	UE_LOG(LogTemp, Warning, TEXT("Applying warp targets. MotionWarp=%s"), MotionWarpComp ? TEXT("YES") : TEXT("NO"));
 }
 

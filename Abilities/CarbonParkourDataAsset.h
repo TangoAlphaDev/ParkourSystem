@@ -18,22 +18,9 @@ struct FCarbonParkourMove
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	ECarbonParkourType ParkourType = ECarbonParkourType::None;
 
-	// Montage to play for this parkour type
+	// Array of montages to play for this parkour type
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	TObjectPtr<UAnimMontage> Montage;
-
-	// Name of the warp targets (must match anim notify / montage)
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	FName WarpTargetStartName = "ParkourTargetStart";
-
-	UPROPERTY(EditAnywhere,BlueprintReadOnly)
-	FName WarpTargetTicTacName = "ParkourTargetTicTac";
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	FName WarpTargetMidName = "ParkourTargetMid";
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	FName WarpTargetEndName = "ParkourTargetEnd";
+	TArray<TObjectPtr<UAnimMontage>> Montages;
 };
 
 UCLASS()

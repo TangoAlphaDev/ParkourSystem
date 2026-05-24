@@ -25,10 +25,10 @@ public:
 
 	// Turn on and off debug view
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|Debug")
-	bool bDebugTraces = false;
+	bool bDebugTraces = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|Debug")
-	bool bDebugSpheres = false;
+	bool bDebugSpheres = true;
 
 	// Turn on or off motion warping
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|MotionWarping")
@@ -49,6 +49,12 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category="Parkour|Trace")
 	float SideTraceDistance = 150.f;
+
+	UPROPERTY(EditAnywhere, Category="Parkour|Trace")
+	float WallSideTraceDistance = 200.f;
+
+	UPROPERTY(EditAnywhere, Category="Parkour|Trace")
+	float WallRunTraceDistance = 575.f;
 
 	// Speed required to trigger running traces
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|Trace")
@@ -82,7 +88,7 @@ protected:
 	
 	// Height thresholds (for tuning)
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
-	float MaxStepHeight = 60.f;
+	float MinHeight = 50.f;
 
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
 	float MaxVaultHeight = 100.f;
@@ -98,7 +104,7 @@ protected:
 
 	// Warp adjustment values
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|Adjustment")
-	float SideOffsetAdjustment = 80.0f;
+	float SideOffsetAdjustment = 85.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|Adjustment")
 	float LedgeOffsetYAdjustment = 50.0f;
@@ -115,7 +121,17 @@ private:
 	
 	void RunHeightTraces();
 	
-	bool SideTrace(bool bLeftSide);
+	bool TicTacTrace(bool bLeftSide);
+
+	bool WallRunTrace(bool bLeftSide);
+
+	void WallRunValidationTrace(const FVector& EndLocation, const FVector& RunEndLocation);
+
+	// Function to clear cache
+	void ClearCachedTraces();
+
+	// Function to get character speed
+	void GetRunning();
 
 	// Function to get ground offset to adjust for character height in traces
 	float GetGroundOffset();
@@ -126,21 +142,44 @@ private:
 	// Function to determine trace distance based on character speed
 	float GetTraceDistance() const;
 
+	// Helper function to initialize TraceParams with ignored actors
+	void InitializeTraceParams(FCollisionQueryParams& TraceParams) const;
+
 	// Function to pick vault type based on trace results
 	ECarbonParkourType ClassifyParkourType();
-
-	// Function to cached Tic-Tac results
-	void AdjustCachedTicTacLocations(float AdjustmentValue);
 
 	// Function to adjust cached ledge hit location
 	void AdjustCachedLedgeLocations(float AdjustmentYValue, float AdjustmentZValue);
 
+	// Function to cached Tic-Tac results
+	void AdjustCachedTicTacLocations(float AdjustmentValue);
+
+	// Function to adjust cached wall run hit location
+	void AdjustCachedWallRunLocation(float AdjustmentValue);
+
+	// Cache owner character for quick access
 	TWeakObjectPtr<ACharacter> OwnerChar = nullptr;
 
 	// Capsule shape
 	float TraceCapsuleHalfHeight = 200.f;
 	float TraceCapsuleRadius = 1.f;
 
+	// Bool for speed
+	bool isRunning;
+
+	// Bool for climbing ledge
+	bool bClimbLedge = false;
+
+	// Bool to check if tic-tac is within distance
+	bool bTicTacHitDistance = false;
+	
+	// Bool for setting tic-tac offset
+	bool bTicTacOffset;
+	
+	// Bool for clean wall run
+	bool bWallRunValid;
+
+	// Cached variables for building parkour solution
 	// Cached trace results
 	FHitResult CachedForwardHit;
 	FHitResult CachedBackwardHit;
@@ -149,24 +188,30 @@ private:
 	FHitResult CachedMidHeightHit; 
 	FHitResult CachedLandHeightHit;
 
-	// Side traces
-	FHitResult CachedLeftSideHit;
-	FHitResult CachedRightSideHit;
+	// Tic-tac side trace hits
+	FHitResult CachedTicTacLeftHit;
+	FHitResult CachedTicTacRightHit;
+	FHitResult CachedTicTacHit;
 
-	// Bool to check if tic-tac is within distance
-	bool bTicTacHitDistance = false;
+	// Wall run validation hits
+	FHitResult CachedWallRunLeftHit;
+	FHitResult CachedWallRunRightHit;
+	FHitResult CachedWallRunHit;
 	
 	// Cached adjusted locations for side traces
-	UE::Math::TRotator<double> CachedLeftSideRotation;
-	UE::Math::TRotator<double> CachedRightSideRotation;
+	UE::Math::TRotator<double> CachedLeftTicTacRotation;
+	UE::Math::TRotator<double> CachedRightTicTacRotation;
 
-	FVector CachedTicTacHitLocation;
+	UE::Math::TRotator<double> CachedLeftRunRotation;
+	UE::Math::TRotator<double> CachedRightRunRotation;
 
-	// Bool for setting tic-tac offset
-	bool bTicTacOffset;
+	FVector CachedLeftTicTacHitLocation;
+	FVector CachedRightTicTacHitLocation;
+	FVector AdjustedCachedTicTacHitLocation;
 
-	// Bool for climbing ledge
-	bool bClimbLedge = false;
+	FVector CachedLeftWallRunHitLocation;
+	FVector CachedRightWallRunHitLocation;
+	FVector AdjustedCachedRunHitLocation;
 
 	// Cached obstacle measurements
 	TArray<float> CachedObjectHeights;

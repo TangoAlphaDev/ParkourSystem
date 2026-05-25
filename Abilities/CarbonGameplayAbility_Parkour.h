@@ -14,6 +14,9 @@ class LYRAGAME_API UCarbonGameplayAbility_Parkour : public ULyraGameplayAbility
 	GENERATED_BODY()
 
 public:
+	// The constructor. This configures the net execution policy, security policy and instancing policy for proper multiplayer behaviour
+	UCarbonGameplayAbility_Parkour();
+
 	// Ability activation
 	virtual void ActivateAbility(
 	  const FGameplayAbilitySpecHandle Handle,
@@ -35,4 +38,13 @@ protected:
 	void OnMontageCancelled();
 
 	bool AbilityFalling = false;
+
+private:
+	// Helper to pick the montage to play for a given parkour type based on data asset
+	UAnimMontage* SelectMontageForParkourType(
+		ECarbonParkourType ParkourType,
+		const FGameplayAbilityActivationInfo& ActivationInfo) const;
+
+	// Helper to determine if we should change movement mode
+	static bool ShouldChangeMovementMode(const FGameplayAbilityActorInfo* ActorInfo);
 };

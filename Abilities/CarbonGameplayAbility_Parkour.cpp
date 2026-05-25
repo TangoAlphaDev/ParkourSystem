@@ -9,20 +9,104 @@
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
+
+// The constructor
+UCarbonGameplayAbility_Parkour::UCarbonGameplayAbility_Parkour()
+{
+	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted; // ability runs on the client and the server
+	NetSecurityPolicy  = EGameplayAbilityNetSecurityPolicy::ClientOrServer; // either side can trigger the ability
+	InstancingPolicy   = EGameplayAbilityInstancingPolicy::InstancedPerActor; //each actor gets their own instance
+}
+
+
+//  Helper function to determine if we should change movement mode
+bool UCarbonGameplayAbility_Parkour::ShouldChangeMovementMode(const FGameplayAbilityActorInfo* ActorInfo)
+{
+	if (!ActorInfo)
+	{
+		return false;
+	}
+
+	const AActor* Avatar = ActorInfo->AvatarActor.Get();
+	if (!Avatar)
+	{
+		return false;
+	}
+
+	// Authority always sets the mode
+	if (Avatar->HasAuthority())
+	{
+		return true;
+	}
+
+	// Locally controlled autonomous proxy sets it for prediction
+	if (const APawn* Pawn = Cast<APawn>(Avatar))
+	{
+		if (Pawn->IsLocallyControlled())
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+// Helper function to select the montage to play
+UAnimMontage* UCarbonGameplayAbility_Parkour::SelectMontageForParkourType(
+	ECarbonParkourType ParkourType,
+	const FGameplayAbilityActivationInfo& ActivationInfo) const
+{
+	if (!ParkourData)
+	{
+		return nullptr;
+	}
+
+	const FCarbonParkourMove* MatchingMove = ParkourData->Moves.FindByPredicate(
+		[ParkourType](const FCarbonParkourMove& Move)
+		{
+			return Move.ParkourType == ParkourType;
+		});
+
+	if (!MatchingMove || MatchingMove->Montages.Num() == 0)
+	{
+		return nullptr;
+	}
+
+	if (MatchingMove->Montages.Num() == 1)
+	{
+		return MatchingMove->Montages[0];
+	}
+
+	// Seed an random stream with the prediction key so the client and server pick same
+	const int32 PredictionSeed = (int32)ActivationInfo.GetActivationPredictionKey().Current;
+	const int32 Seed = (PredictionSeed != 0)
+		? PredictionSeed
+		: (int32)(uint8)ParkourType; // fallback: stable per parkour type
+
+	FRandomStream Stream(Seed);
+	const int32 Index = Stream.RandRange(0, MatchingMove->Montages.Num() - 1);
+	return MatchingMove->Montages[Index];
+}
+
+
+// The main function where the ability is activated
 void UCarbonGameplayAbility_Parkour::ActivateAbility(
   const FGameplayAbilitySpecHandle Handle,
   const FGameplayAbilityActorInfo* ActorInfo,
   const FGameplayAbilityActivationInfo ActivationInfo,
   const FGameplayEventData* TriggerEventData)
 {
-	UE_LOG(LogTemp, Warning, TEXT("Parkour Ability ActivateAbility Called"));
+	UE_LOG(LogTemp, Warning, TEXT("Parkour Ability ActivateAbility Called (NetMode=%d HasAuthority=%d)"),
+		ActorInfo && ActorInfo->AvatarActor.IsValid() ? (int32)ActorInfo->AvatarActor->GetNetMode() : -1,
+		ActorInfo && ActorInfo->AvatarActor.IsValid() ? (int32)ActorInfo->AvatarActor->HasAuthority() : -1);
 
 	// Get and validate Lyra Character
 	ALyraCharacter* LyraChar = Cast<ALyraCharacter>(ActorInfo->AvatarActor.Get());
 	if (!LyraChar)
 	{
-	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
-	return;
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+		return;
 	}
 
 	// Get and validate the ParkourComponent
@@ -42,14 +126,14 @@ void UCarbonGameplayAbility_Parkour::ActivateAbility(
 		return;
 	}
 
-	// Call the VaultSolution function
+	// Run traces and build a solution
 	ParkourComp->VaultSolution();
 
 	// Get the cached parkour solution and validate
 	const FCarbonParkourSolution& Solution = ParkourComp->GetCachedParkourSolution();
 	if (!Solution.bIsValid)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Parkour solution invalid"));
+		UE_LOG(LogTemp, Warning, TEXT("Parkour solution invalid (likely no obstacle in range)"));
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 		return;
 	}
@@ -65,21 +149,8 @@ void UCarbonGameplayAbility_Parkour::ActivateAbility(
 		return;
 	}
 
-	// Select montage based on parkour type and random selection if multiple montages are available
-	UAnimMontage* MontageToPlay = nullptr;
-	for (const FCarbonParkourMove& Move : ParkourData->Moves)
-	{
-		if (Move.ParkourType == Solution.ParkourType)
-		{
-			if (Move.Montages.Num() > 0)
-			{
-				int32 Index = FMath::RandRange(0, Move.Montages.Num() - 1);
-				MontageToPlay = Move.Montages[Index];
-			}
-			break;
-		}
-	}
-
+	// Select montage. Client and server pick the same one for a given activation
+	UAnimMontage* MontageToPlay = SelectMontageForParkourType(Solution.ParkourType, ActivationInfo);
 	if (!MontageToPlay)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("No montage found for ParkourType %s"), *UEnum::GetValueAsString(Solution.ParkourType));
@@ -94,16 +165,17 @@ void UCarbonGameplayAbility_Parkour::ActivateAbility(
 		ApplyWarpTargets(LyraChar, Solution);
 	}
 
-	// Set movement mode to flying and stop movement to ensure proper montage play and warping (this is a test, may need adjustments based on actual character setup and desired behavior)
+	// Set movement mode to flying
 	UCharacterMovementComponent* MoveComp = LyraChar->GetCharacterMovement();
-	if (MoveComp)
+	if (MoveComp && ShouldChangeMovementMode(ActorInfo))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PreMontage MovementMode=%d IsMovingOnGround=%d"), (int32)MoveComp->MovementMode, MoveComp->IsMovingOnGround());
+		UE_LOG(LogTemp, Warning, TEXT("PreMontage MovementMode=%d IsMovingOnGround=%d"),
+			(int32)MoveComp->MovementMode, MoveComp->IsMovingOnGround());
 
 		MoveComp->SetMovementMode(MOVE_Flying);
 	}
 
-	// testing
+	// Diagnostic logging
 	UE_LOG(LogTemp, Warning, TEXT("Montage: %s  HasRootMotion=%d"), *GetNameSafe(MontageToPlay), MontageToPlay->HasRootMotion());
 	if (USkeletalMeshComponent* Mesh = LyraChar->GetMesh())
 	{
@@ -116,7 +188,7 @@ void UCarbonGameplayAbility_Parkour::ActivateAbility(
 	{
 		UE_LOG(LogTemp, Warning, TEXT("MovementMode=%d  IsMovingOnGround=%d "), (int32)MoveComp->MovementMode, MoveComp->IsMovingOnGround());
 	}
-	
+
 	// Play montage and wait
 	UAbilityTask_PlayMontageAndWait* Task = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(
 		this,
@@ -133,16 +205,6 @@ void UCarbonGameplayAbility_Parkour::ActivateAbility(
 	Task->ReadyForActivation();
 
 	UE_LOG(LogTemp, Warning, TEXT("Solution Valid=%d Type=%s"), Solution.bIsValid, *UEnum::GetValueAsString(Solution.ParkourType));
-
-	//UE_LOG(LogTemp, Warning, TEXT("Warp Start=%s Loc=%s"), *Solution.WarpTargetStart.ToString(), *Solution.WarpTransformStart.GetLocation().ToString());
-
-	//UE_LOG(LogTemp, Warning, TEXT("Warp End=%s Loc=%s"), *Solution.WarpTargetLedge.ToString(), *Solution.WarpTransformLedge.GetLocation().ToString());
-
-	//UE_LOG(LogTemp, Warning, TEXT("Warp Mid=%s Loc=%s"), *Solution.WarpTargetMiddle.ToString(), *Solution.WarpTransformMid.GetLocation().ToString());
-
-	//UE_LOG(LogTemp, Warning, TEXT("Warp Land=%s Loc=%s"), *Solution.WarpTargetLand.ToString(), *Solution.WarpTransformLand.GetLocation().ToString());
-	
-	//UE_LOG(LogTemp, Warning, TEXT("Warp TicTac=%s Loc=%s"), *Solution.WarpTargetTicTac.ToString(), *Solution.WarpTransformTicTac.GetLocation().ToString());
 }
 
 
@@ -155,16 +217,22 @@ void UCarbonGameplayAbility_Parkour::OnMontageCompleted()
 	{
 		if (UCharacterMovementComponent* MoveComp = LyraChar->GetCharacterMovement())
 		{
-			// Do not force walking here.
-			if (!AbilityFalling && MoveComp->MovementMode != MOVE_Falling)
+			// Only the authority + local proxy change the movement mode
+			// remote simulated proxies receive it via CMC replication
+			if (ShouldChangeMovementMode(CurrentActorInfo))
 			{
-				MoveComp->SetMovementMode(MOVE_Walking);
+				// Do not force walking if we were already in another mode
+				if (!AbilityFalling && MoveComp->MovementMode != MOVE_Falling)
+				{
+					MoveComp->SetMovementMode(MOVE_Walking);
+				}
 			}
 		}
 	}
 
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
 }
+
 
 void UCarbonGameplayAbility_Parkour::OnMontageCancelled()
 {
@@ -175,18 +243,21 @@ void UCarbonGameplayAbility_Parkour::OnMontageCancelled()
 	{
 		if (UCharacterMovementComponent* MoveComp = LyraChar->GetCharacterMovement())
 		{
-			if (AbilityFalling)
+			if (ShouldChangeMovementMode(CurrentActorInfo))
 			{
-				MoveComp->SetMovementMode(MOVE_Falling);
-				AbilityFalling = false;
-			}
-			else
-			{
-				MoveComp->SetMovementMode(MOVE_Walking);
+				if (AbilityFalling)
+				{
+					MoveComp->SetMovementMode(MOVE_Falling);
+					AbilityFalling = false;
+				}
+				else
+				{
+					MoveComp->SetMovementMode(MOVE_Walking);
+				}
 			}
 		}
 	}
-	
+
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
 }
 
@@ -195,7 +266,7 @@ void UCarbonGameplayAbility_Parkour::OnMontageCancelled()
 void UCarbonGameplayAbility_Parkour::ApplyWarpTargets(ALyraCharacter* Character, const FCarbonParkourSolution& Solution)
 {
 	UE_LOG(LogTemp, Warning, TEXT("Applying warp targets."));
-	
+
 	if (!Character) return;
 
 	UMotionWarpingComponent* MotionWarpComp = Character->FindComponentByClass<UMotionWarpingComponent>();
@@ -204,7 +275,7 @@ void UCarbonGameplayAbility_Parkour::ApplyWarpTargets(ALyraCharacter* Character,
 
 	if (!MotionWarpComp) return;
 
-	// Add warp targets if specified	
+	// Add warp targets if specified
 	if (!Solution.WarpTargetTicTac.IsNone())
 	{
 		MotionWarpComp->AddOrUpdateWarpTarget(FMotionWarpingTarget(
@@ -220,7 +291,7 @@ void UCarbonGameplayAbility_Parkour::ApplyWarpTargets(ALyraCharacter* Character,
 			Solution.WarpTransformLedge
 		));
 	}
-	
+
 	if (!Solution.WarpTargetWallRun.IsNone())
 	{
 		MotionWarpComp->AddOrUpdateWarpTarget(FMotionWarpingTarget(
@@ -228,7 +299,6 @@ void UCarbonGameplayAbility_Parkour::ApplyWarpTargets(ALyraCharacter* Character,
 			Solution.WarpTransformWallRun
 		));
 	}
-	
+
 	UE_LOG(LogTemp, Warning, TEXT("Applying warp targets. MotionWarp=%s"), MotionWarpComp ? TEXT("YES") : TEXT("NO"));
 }
-

@@ -13,7 +13,10 @@ class LYRAGAME_API UCarbonParkourComponent : public UActorComponent
 	GENERATED_BODY()
 
 public:
-	
+	// This component is intentionally NOT data-replicated. It's computed locally on whichever proxy is allowed to run the ability
+	// Proxies don't need to compute a solution. They play the replicated montage that the server starts
+	UCarbonParkourComponent();
+
 	// Run traces for parkour detection
 	void VaultSolution();
 
@@ -22,6 +25,10 @@ public:
 
 	// Get the cached parkour solution to use in the ability
 	const FCarbonParkourSolution& GetCachedParkourSolution() const;
+
+	// Returns true if this proxy is allowed to evaluate the parkour solution
+	// Proxies skip the traces
+	bool ShouldEvaluateParkour() const;
 
 	// Turn on and off debug view
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|Debug")
@@ -35,6 +42,9 @@ public:
 	bool bEnableMotionWarping = true;
 
 protected:
+
+	// Cache the owning character once it is available
+	virtual void BeginPlay() override;
 
 	// Traces for Parkour detection parameters
 	// Max distance to search for an obstacle
@@ -76,7 +86,7 @@ protected:
 	// Depth thresholds (for tuning)
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
 	float ObjectDepthXShort = 35.f;
-	
+
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
 	float ObjectDepthShort = 60.f;
 
@@ -85,7 +95,7 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
 	float ObjectDepthLong = 250.f;
-	
+
 	// Height thresholds (for tuning)
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
 	float MinHeight = 50.f;
@@ -98,9 +108,6 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
 	float MaxClimbObjectHeight = 350.f;
-	
-	UPROPERTY(EditAnywhere, Category="Parkour|Vault")
-	float MaxDoubleClimbObjectHeight = 500.f;
 
 	// Warp adjustment values
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parkour|Adjustment")
@@ -118,9 +125,9 @@ private:
 	void DepthTrace();
 
 	void HeightTrace(const FVector& StartLocation, FHitResult& CachedHitResult);
-	
+
 	void RunHeightTraces();
-	
+
 	bool TicTacTrace(bool bLeftSide);
 
 	bool WallRunTrace(bool bLeftSide);
@@ -138,12 +145,6 @@ private:
 
 	// Function to validate side hit based on normals
 	void ValidateSideHits();
-
-	// Function to determine trace distance based on character speed
-	float GetTraceDistance() const;
-
-	// Helper function to initialize TraceParams with ignored actors
-	void InitializeTraceParams(FCollisionQueryParams& TraceParams) const;
 
 	// Function to pick vault type based on trace results
 	ECarbonParkourType ClassifyParkourType();
@@ -172,10 +173,10 @@ private:
 
 	// Bool to check if tic-tac is within distance
 	bool bTicTacHitDistance = false;
-	
+
 	// Bool for setting tic-tac offset
 	bool bTicTacOffset;
-	
+
 	// Bool for clean wall run
 	bool bWallRunValid;
 
@@ -185,7 +186,7 @@ private:
 	FHitResult CachedBackwardHit;
 	FHitResult CachedStartHeightHit;
 	FHitResult CachedLedgeHeightHit;
-	FHitResult CachedMidHeightHit; 
+	FHitResult CachedMidHeightHit;
 	FHitResult CachedLandHeightHit;
 
 	// Tic-tac side trace hits
@@ -197,7 +198,7 @@ private:
 	FHitResult CachedWallRunLeftHit;
 	FHitResult CachedWallRunRightHit;
 	FHitResult CachedWallRunHit;
-	
+
 	// Cached adjusted locations for side traces
 	UE::Math::TRotator<double> CachedLeftTicTacRotation;
 	UE::Math::TRotator<double> CachedRightTicTacRotation;
@@ -221,7 +222,10 @@ private:
 
 	// Cached ground offset
 	float CachedGroundOffset = 0.f;
-	
+
+	// Cached bool to set movement type after parkour
+	bool bShouldFall = false;
+
 	// Cached parkour type
 	ECarbonParkourType CachedParkourType = ECarbonParkourType::None;
 

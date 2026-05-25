@@ -9,27 +9,81 @@
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
+// The constructor
+UCarbonParkourComponent::UCarbonParkourComponent()
+{
+	PrimaryComponentTick.bCanEverTick = false;
+	SetIsReplicatedByDefault(false);
+}
+
+
+// Cache the owning character once
+void UCarbonParkourComponent::BeginPlay()
+{
+	Super::BeginPlay();
+
+	OwnerChar = Cast<ACharacter>(GetOwner());
+}
+
+
+// Returns true if this proxy should evaluate the parkour solution
+bool UCarbonParkourComponent::ShouldEvaluateParkour() const
+{
+	const AActor* Owner = GetOwner();
+	if (!Owner)
+	{
+		return false;
+	}
+
+	// Authority always runs traces (covers server, standalone, host)
+	if (Owner->HasAuthority())
+	{
+		return true;
+	}
+
+	// Locally controlled autonomous proxy runs traces for prediction
+	if (const ACharacter* OwningChar = Cast<ACharacter>(Owner))
+	{
+		if (OwningChar->IsLocallyControlled())
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
 // Run traces for parkour detection
 void UCarbonParkourComponent::VaultSolution()
 {
-	// Cast to character and cache owner for quicker access
-	OwnerChar = Cast<ACharacter>(GetOwner());
-	
+	// Make sure the cached owner is valid even if BeginPlay didn't fire
+	if (!OwnerChar.IsValid())
+	{
+		OwnerChar = Cast<ACharacter>(GetOwner());
+	}
+
+	// Bail out cheaply on simulated proxies — they don't need a solution
+	if (!ShouldEvaluateParkour())
+	{
+		return;
+	}
+
 	// Clear cached trace results
 	ClearCachedTraces();
 
 	GetRunning();
 
 	GetGroundOffset();
-	
+
 	// Run traces
 	DepthTrace();
-	
+
 	RunHeightTraces();
-	
+
 	TicTacTrace(true); // Left side
 	TicTacTrace(false); // Right side
-	
+
 	ValidateSideHits();
 
 	WallRunTrace(true);
@@ -104,39 +158,6 @@ float UCarbonParkourComponent::GetGroundOffset()
 }
 
 
-// Determine trace distance based on character speed and tic tac eligibility
-float UCarbonParkourComponent::GetTraceDistance() const
-{
-	if (!OwnerChar.IsValid())
-	{
-		return DefaultTraceDistance;
-	}
-
-	const UCharacterMovementComponent* MoveComp = OwnerChar->GetCharacterMovement();
-	if (!MoveComp)
-	{
-		return DefaultTraceDistance;
-	}
-
-	const float Speed2D = MoveComp->Velocity.Size2D();
-
-	// Check for valid side hits and velocity threshold
-	if ((CachedTicTacLeftHit.IsValidBlockingHit() || CachedTicTacRightHit.IsValidBlockingHit()) && Speed2D >= SpeedThreshold)
-	{
-		return RunningTraceDistance;
-	}
-
-	return DefaultTraceDistance;
-}
-
-
-// Helper function to initialize TraceParams with ignored actors
-void UCarbonParkourComponent::InitializeTraceParams(FCollisionQueryParams& TraceParams) const
-{
-	
-}
-
-
 // Forward trace and reverse trace for object depth
 void UCarbonParkourComponent::DepthTrace()
 {
@@ -152,25 +173,25 @@ void UCarbonParkourComponent::DepthTrace()
 
 	// Get capsule half height
 	float CapsuleHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
-	
+
 	// Calculate trace start and end locations and direction
     FVector StartLocation = OwnerChar->GetActorLocation();
 	StartLocation.Z += (TraceCapsuleHalfHeight - CapsuleHalfHeight); // Offset the capsule center to keep the bottom aligned with the larger capsule trace
     FVector ForwardVector = OwnerChar->GetActorForwardVector();
-	
+
 	// Trace distance
 	float TraceDistance = isRunning ? RunningTraceDistance : DefaultTraceDistance;
 	FVector EndLocation = StartLocation + (ForwardVector * TraceDistance);
-	
+
     FCollisionQueryParams TraceParams(FName(TEXT("ParkourDepthTrace")), true, OwnerChar.Get());
     TraceParams.bReturnPhysicalMaterial = false;
 
 	// Ignore all LyraCharacter instances
 	for (TActorIterator<ALyraCharacter> It(GetWorld()); It; ++It)
 	{
-		TraceParams.AddIgnoredActor(GetOwner());
+		TraceParams.AddIgnoredActor(*It);
 	}
-	
+
     // First capsule trace to detect the object
     FHitResult InitialHitResult;
     bool bInitialHit = GetWorld()->SweepSingleByChannel(
@@ -302,7 +323,7 @@ void UCarbonParkourComponent::RunHeightTraces()
 	FVector MidpointLocation = CachedBackwardHit.ImpactPoint;
 	MidpointLocation.Z = CapsuleBottomZ + DownTraceStartHeight;
 	HeightTrace(MidpointLocation, CachedMidHeightHit); // Get the height at the back of the obstacle
-	
+
     // Calculate a point slightly beyond the back hit location to check for landing surface
     FVector LandLocation = CachedBackwardHit.Location + (ForwardVector * LandTraceDistance);
     LandLocation.Z = CapsuleBottomZ + DownTraceStartHeight; // Get the same Z height as the initial trace
@@ -313,18 +334,17 @@ void UCarbonParkourComponent::RunHeightTraces()
 // The height trace subroutine
 void UCarbonParkourComponent::HeightTrace(const FVector& StartLocation, FHitResult& CachedHitResult)
 {
-	//ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
 	if (!OwnerChar.IsValid())
 	{
 		return;
 	}
-	
+
 	// Calculate end location by tracing down from the start location
 	FVector EndLocation = StartLocation - FVector(0.f, 0.f, DownTraceDepth);
 
 	FCollisionQueryParams TraceParams(FName(TEXT("ParkourHeightTrace")), true, OwnerChar.Get());
 	TraceParams.bReturnPhysicalMaterial = false;
-	
+
 	// Ignore all LyraCharacter instances
 	for (TActorIterator<ALyraCharacter> It(GetWorld()); It; ++It)
 	{
@@ -439,7 +459,7 @@ bool UCarbonParkourComponent::TicTacTrace(bool bLeftSide)
 			DrawDebugPoint(GetWorld(), HitResult.ImpactPoint, 10.f, FColor::Yellow, false, 2.0f);
 		}
 	}
-	
+
 	return bHit;
 }
 
@@ -459,7 +479,7 @@ void UCarbonParkourComponent::ValidateSideHits()
 
 	if (CachedTicTacLeftHit.bBlockingHit)
 	{
-		float Dot = FVector::DotProduct(ForwardNormal, CachedTicTacLeftHit.ImpactNormal); 
+		float Dot = FVector::DotProduct(ForwardNormal, CachedTicTacLeftHit.ImpactNormal);
 		if (Dot > NormalThreshold || CachedForwardHit.GetActor() == CachedTicTacLeftHit.GetActor())
 		{
 			CachedTicTacLeftHit = FHitResult();
@@ -579,7 +599,7 @@ bool UCarbonParkourComponent::WallRunTrace(bool bLeftSide)
 	{
 		CachedWallRunHit = CachedWallRunLeftHit;
 	}
-	
+
 	return bHit;
 }
 
@@ -594,7 +614,7 @@ void UCarbonParkourComponent::WallRunValidationTrace(const FVector& WallHitLocat
 
 	// Get the character's forward vector
 	FVector ForwardVector = OwnerChar->GetActorForwardVector();
-	
+
 	// Calculate the dot product between the forward vector and the wall normal
 	float DotProduct = FVector::DotProduct(ForwardVector, WallNormal);
 
@@ -619,7 +639,7 @@ void UCarbonParkourComponent::WallRunValidationTrace(const FVector& WallHitLocat
 
 	// Offset the start location slightly away from the wall
 	FVector StartLocation = WallHitLocation + WallNormal * (CapsuleRadius + 1.0f); // Offset by capsule radius + 1 unit
-	
+
 	// Calculate the direction along the wall
 	FVector WallDirection = FVector::CrossProduct(WallNormal, FVector::UpVector).GetSafeNormal();
 
@@ -673,17 +693,21 @@ void UCarbonParkourComponent::WallRunValidationTrace(const FVector& WallHitLocat
 // Pick vault type based on trace results
 ECarbonParkourType UCarbonParkourComponent::ClassifyParkourType()
 {
-	CachedParkourSolution.bShouldFall = false; // Default to not falling
-	if (bWallRunValid)
-	{
-		
-	}
+	bShouldFall = false; // Default to not falling
+
     if (!CachedForwardHit.IsValidBlockingHit() && (CachedWallRunLeftHit.bBlockingHit || CachedWallRunRightHit.bBlockingHit))
     {
     	if (CachedWallRunLeftHit.bBlockingHit) return ECarbonParkourType::WallRunLeft;
     	if (CachedWallRunRightHit.bBlockingHit) return ECarbonParkourType::WallRunRight;
         return ECarbonParkourType::None;
     }
+
+	// Defensive: CachedObjectHeights[1] requires the front-of-obstacle
+	// height trace to have succeeded. Bail out if it didn't.
+	if (CachedObjectHeights.Num() < 2)
+	{
+		return ECarbonParkourType::None;
+	}
 
     float ObjectHeight = CachedObjectHeights[1];
     if (ObjectHeight <= MinHeight)
@@ -703,25 +727,25 @@ ECarbonParkourType UCarbonParkourComponent::ClassifyParkourType()
         if (CachedObjectDepth <= ObjectDepthMedium) return ECarbonParkourType::VaultMedium;
         if (CachedObjectDepth <= ObjectDepthLong) return ECarbonParkourType::VaultLong;
     	return ECarbonParkourType::VaultOn;
-       
+
     }
     if (ObjectHeight <= MaxHighVaultHeight)
     {
-    	CachedParkourSolution.bShouldFall = true; // Falling for high vaults
+    	bShouldFall = true; // Falling for high vaults
     	if (bTicTacHitDistance) // Check if tic-tac is allowed
     	{
     		if (CachedTicTacLeftHit.bBlockingHit)
     		{
     			bTicTacOffset = true;
     			if (CachedObjectDepth <= ObjectDepthShort) return ECarbonParkourType::TicTacLeft;
-    			CachedParkourSolution.bShouldFall = false;
+    			bShouldFall = false;
 				return ECarbonParkourType::TicTacLeftOn;
     		}
     		if (CachedTicTacRightHit.bBlockingHit)
     		{
     			bTicTacOffset = true;
     			if (CachedObjectDepth <= ObjectDepthShort) return ECarbonParkourType::TicTacRight;
-    			CachedParkourSolution.bShouldFall = false;
+    			bShouldFall = false;
     			return ECarbonParkourType::TicTacRightOn;
     		}
     	}
@@ -729,8 +753,8 @@ ECarbonParkourType UCarbonParkourComponent::ClassifyParkourType()
         {
 			if (CachedObjectDepth <= ObjectDepthXShort) return ECarbonParkourType::VaultHighXShort;
         	if (CachedObjectDepth <= ObjectDepthShort) return ECarbonParkourType::VaultHighShort;
-        	
-       		CachedParkourSolution.bShouldFall = false;
+
+       		bShouldFall = false;
        		return ECarbonParkourType::VaultHighOn;
         }
     }
@@ -741,7 +765,7 @@ ECarbonParkourType UCarbonParkourComponent::ClassifyParkourType()
     	if (CachedObjectDepth <= ObjectDepthShort) return ECarbonParkourType::WallRunOver;
 	    return ECarbonParkourType::WallRunOn;
     }
-	
+
     return ECarbonParkourType::None;
 }
 
@@ -769,7 +793,7 @@ void UCarbonParkourComponent::AdjustCachedTicTacLocations(float AdjustmentValue)
 	}
 
 	const FHitResult SideHit = CachedTicTacLeftHit.bBlockingHit ? CachedTicTacLeftHit : CachedTicTacRightHit;
-	
+
 	if (!SideHit.bBlockingHit)
 	{
 		return;
@@ -786,7 +810,7 @@ void UCarbonParkourComponent::AdjustCachedTicTacLocations(float AdjustmentValue)
 void UCarbonParkourComponent::AdjustCachedWallRunLocation(float AdjustmentValue)
 {
 	const FHitResult SideHit = CachedWallRunLeftHit.bBlockingHit ? CachedWallRunLeftHit : CachedWallRunRightHit;
-	
+
 	if (!SideHit.bBlockingHit)
 	{
 		return;
@@ -807,7 +831,7 @@ void UCarbonParkourComponent::BuildParkourSolution()
 	{
 		return; // Ensure the owner is valid before proceeding
 	}
-	
+
 	// Initialize solution struct
 	FCarbonParkourSolution Solution;
 	Solution.Reset();
@@ -815,6 +839,9 @@ void UCarbonParkourComponent::BuildParkourSolution()
 	// Validate forward hit
 	if (!CachedForwardHit.IsValidBlockingHit() && !CachedWallRunLeftHit.IsValidBlockingHit() && !CachedWallRunRightHit.IsValidBlockingHit())
 	{
+		// Important: still store the empty solution so the ability sees
+		// bIsValid == false rather than a stale previous solution.
+		CachedParkourSolution = Solution;
 		return;
 	}
 
@@ -822,6 +849,7 @@ void UCarbonParkourComponent::BuildParkourSolution()
 	const ECarbonParkourType ParkourType = ClassifyParkourType();
 	if (ParkourType == ECarbonParkourType::None)
 	{
+		CachedParkourSolution = Solution;
 		return;
 	}
 
@@ -840,11 +868,13 @@ void UCarbonParkourComponent::BuildParkourSolution()
 	{
 		AdjustCachedWallRunLocation(SideOffsetAdjustment);
 	}
-	
+
 	// Set solution data
 	Solution.bIsValid = true;
 	Solution.ParkourType = ParkourType;
-	
+
+	Solution.bShouldFall = bShouldFall;
+
 	// Apply motion warping logic
 	Solution.WarpTargetLedge = TEXT("ParkourTargetLedge");
 	Solution.WarpTargetTicTac = TEXT("ParkourTargetTicTac");
@@ -897,7 +927,7 @@ void UCarbonParkourComponent::BuildParkourSolution()
 	Solution.bRightRunHit = CachedWallRunRightHit.bBlockingHit;
 	Solution.LeftRunRotation = CachedLeftRunRotation;
 	Solution.RightRunRotation = CachedRightRunRotation;
-	
+
 	// Cache the solution or broadcast solution (which is best?)
 	CachedParkourSolution = Solution;
 	// OnParkourSolutionReady.Broadcast(Solution);
@@ -965,7 +995,7 @@ void UCarbonParkourComponent::ClearCachedTraces()
 
 	CachedLeftTicTacHitLocation = FVector::ZeroVector;
 	CachedRightTicTacHitLocation = FVector::ZeroVector;
-	
+
 	CachedLeftWallRunHitLocation = FVector::ZeroVector;
 	CachedRightWallRunHitLocation = FVector::ZeroVector;
 
@@ -978,6 +1008,7 @@ void UCarbonParkourComponent::ClearCachedTraces()
 	bClimbLedge = false;
 	bWallRunValid = false;
 	isRunning = false;
+	bShouldFall = false;
 
 	UE_LOG(LogTemp, Warning, TEXT("Cached variables cleared"));
 }
